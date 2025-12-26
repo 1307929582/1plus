@@ -108,13 +108,17 @@ start_backend() {
     echo -e "${BLUE}启动后端服务...${NC}"
     cd "$BACKEND_DIR"
 
-    if [ -d "venv" ]; then
-        source venv/bin/activate
-    elif [ -d "$PROJECT_DIR/venv" ]; then
-        source "$PROJECT_DIR/venv/bin/activate"
+    # 确定 Python 路径
+    local PYTHON_BIN=""
+    if [ -f "venv/bin/python3" ]; then
+        PYTHON_BIN="$BACKEND_DIR/venv/bin/python3"
+    elif [ -f "$PROJECT_DIR/venv/bin/python3" ]; then
+        PYTHON_BIN="$PROJECT_DIR/venv/bin/python3"
+    else
+        PYTHON_BIN="python3"
     fi
 
-    nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 14100 > "$LOG_DIR/backend.log" 2>&1 &
+    nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port 14100 > "$LOG_DIR/backend.log" 2>&1 &
     echo $! > "$PID_DIR/backend.pid"
 
     sleep 2
