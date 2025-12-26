@@ -29,18 +29,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/verify" element={<Verify />} />
-        <Route path="/login" element={
-          isAuth ? <Navigate to="/admin" /> : <Login onLogin={handleLogin} />
-        } />
+        <Route path="/" element={<Verify />} />
         <Route path="/admin" element={
-          isAuth ? <Layout onLogout={handleLogout} /> : <Navigate to="/login" />
+          isAuth ? <Layout onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
         }>
           <Route index element={<Dashboard />} />
           <Route path="veterans" element={<Veterans />} />
           <Route path="codes" element={<Codes />} />
         </Route>
-        <Route path="*" element={<Navigate to="/verify" />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   );
