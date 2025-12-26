@@ -71,7 +71,7 @@ status() {
 
     if is_running "backend"; then
         echo -e "  后端服务 (API)   : ${GREEN}● 运行中${NC} (PID: $(get_pid backend))"
-        echo -e "                     ${BLUE}http://localhost:8000${NC}"
+        echo -e "                     ${BLUE}http://localhost:14100${NC}"
     else
         echo -e "  后端服务 (API)   : ${RED}○ 未运行${NC}"
     fi
@@ -80,8 +80,8 @@ status() {
 
     if is_running "frontend"; then
         echo -e "  前端服务 (Vite)  : ${GREEN}● 运行中${NC} (PID: $(get_pid frontend))"
-        echo -e "                     ${BLUE}http://localhost:5173${NC}"
-        echo -e "                     ${BLUE}http://localhost:5173/admin${NC}"
+        echo -e "                     ${BLUE}http://localhost:14000${NC}"
+        echo -e "                     ${BLUE}http://localhost:14000/admin${NC}"
     else
         echo -e "  前端服务 (Vite)  : ${RED}○ 未运行${NC}"
     fi
@@ -114,7 +114,7 @@ start_backend() {
         source "$PROJECT_DIR/venv/bin/activate"
     fi
 
-    nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/backend.log" 2>&1 &
+    nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 14100 > "$LOG_DIR/backend.log" 2>&1 &
     echo $! > "$PID_DIR/backend.pid"
 
     sleep 2
@@ -182,9 +182,9 @@ start() {
     echo ""
     echo -e "${GREEN}所有服务已启动！${NC}"
     echo ""
-    echo -e "  ${CYAN}后端 API:${NC}  http://localhost:8000"
-    echo -e "  ${CYAN}前端页面:${NC}  http://localhost:5173"
-    echo -e "  ${CYAN}管理后台:${NC}  http://localhost:5173/admin"
+    echo -e "  ${CYAN}后端 API:${NC}  http://localhost:14100"
+    echo -e "  ${CYAN}前端页面:${NC}  http://localhost:14000"
+    echo -e "  ${CYAN}管理后台:${NC}  http://localhost:14000/admin"
     echo ""
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }

@@ -108,8 +108,8 @@ if [ ! -f ".env" ]; then
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 API_HOST=0.0.0.0
-API_PORT=8000
-FRONTEND_PORT=5173
+API_PORT=14100
+FRONTEND_PORT=14000
 EOF
     log_warn "Default .env created. Please update ADMIN_PASSWORD for production!"
 fi
@@ -126,6 +126,6 @@ echo -e "  ${CYAN}View status:${NC}     ./manage.sh status"
 echo -e "  ${CYAN}View logs:${NC}       ./manage.sh logs"
 echo ""
 echo -e "  ${YELLOW}Default admin:${NC}   admin / admin123"
-echo -e "  ${YELLOW}Backend URL:${NC}     http://localhost:8000"
-echo -e "  ${YELLOW}Frontend URL:${NC}    http://localhost:5173"
+echo -e "  ${YELLOW}Backend URL:${NC}     http://localhost:14100"
+echo -e "  ${YELLOW}Frontend URL:${NC}    http://localhost:14000"
 echo ""
