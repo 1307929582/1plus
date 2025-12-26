@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { veteransApi } from '../api';
 import type { Veteran } from '../api';
-import { Upload, Trash2, RefreshCw, CheckSquare, Square } from 'lucide-react';
+import { Upload, Trash2, RefreshCw, CheckSquare, Square, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 export default function Veterans() {
   const [veterans, setVeterans] = useState<Veteran[]>([]);
@@ -106,10 +106,10 @@ export default function Veterans() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      pending: 'bg-yellow-900 text-yellow-300',
-      success: 'bg-green-900 text-green-300',
-      email_sent: 'bg-blue-900 text-blue-300',
-      failed: 'bg-red-900 text-red-300',
+      pending: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+      success: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+      email_sent: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+      failed: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
     };
     const labels: Record<string, string> = {
       pending: '待验证',
@@ -118,7 +118,7 @@ export default function Veterans() {
       failed: '失败',
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs ${styles[status] || 'bg-gray-700 text-gray-300'}`}>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${styles[status] || 'bg-white/5 text-gray-400 border-white/10'}`}>
         {labels[status] || status}
       </span>
     );
@@ -127,13 +127,13 @@ export default function Veterans() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-white">退伍军人管理</h1>
-        <div className="flex gap-4">
+        <h1 className="text-3xl font-bold text-white">退伍军人管理</h1>
+        <div className="flex gap-3">
           {selected.size > 0 && (
             <button
               onClick={handleDeleteSelected}
               disabled={deleting}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-xl transition-all duration-200 disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
               {deleting ? '删除中...' : `删除选中 (${selected.size})`}
@@ -141,7 +141,7 @@ export default function Veterans() {
           )}
           <button
             onClick={() => loadVeterans()}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-xl transition-all duration-200"
           >
             <RefreshCw className="w-4 h-4" />
             刷新
@@ -156,19 +156,21 @@ export default function Veterans() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+            className="relative flex items-center gap-2 px-4 py-2.5 text-white font-medium rounded-xl overflow-hidden group disabled:opacity-50"
           >
-            <Upload className="w-4 h-4" />
-            {importing ? '导入中...' : '导入 CSV'}
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-fuchsia-500" />
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-fuchsia-500 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300" />
+            <Upload className="w-4 h-4 relative" />
+            <span className="relative">{importing ? '导入中...' : '导入 CSV'}</span>
           </button>
         </div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 flex items-center gap-4">
         <select
           value={filter}
           onChange={(e) => handleFilterChange(e.target.value)}
-          className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 transition-colors"
         >
           <option value="">全部状态</option>
           <option value="pending">待验证</option>
@@ -176,61 +178,63 @@ export default function Veterans() {
           <option value="email_sent">邮件已发</option>
           <option value="failed">失败</option>
         </select>
-        <span className="ml-4 text-gray-400">共 {total} 条记录</span>
+        <span className="text-gray-400">共 {total} 条记录</span>
         {selected.size > 0 && (
-          <span className="ml-4 text-blue-400">已选中 {selected.size} 条</span>
+          <span className="text-fuchsia-400">已选中 {selected.size} 条</span>
         )}
       </div>
 
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-[#12121a]/80 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-900">
+          <thead className="bg-white/5">
             <tr>
-              <th className="px-4 py-3 text-left">
-                <button onClick={toggleSelectAll} className="text-gray-400 hover:text-white">
+              <th className="px-4 py-4 text-left">
+                <button onClick={toggleSelectAll} className="text-gray-400 hover:text-white transition-colors">
                   {selected.size === veterans.length && veterans.length > 0 ? (
-                    <CheckSquare className="w-5 h-5 text-blue-400" />
+                    <CheckSquare className="w-5 h-5 text-fuchsia-400" />
                   ) : (
                     <Square className="w-5 h-5" />
                   )}
                 </button>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">ID</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">姓名</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">出生日期</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">军种</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">状态</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">邮箱</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">操作</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">姓名</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">出生日期</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">军种</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">状态</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">邮箱</th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
+          <tbody className="divide-y divide-white/5">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
-                  加载中...
+                <td colSpan={8} className="px-6 py-12 text-center">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-fuchsia-500"></div>
+                  </div>
                 </td>
               </tr>
             ) : veterans.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
                   暂无数据
                 </td>
               </tr>
             ) : (
               veterans.map((v) => (
-                <tr key={v.id} className={`hover:bg-gray-750 ${selected.has(v.id) ? 'bg-blue-900/20' : ''}`}>
+                <tr key={v.id} className={`transition-colors ${selected.has(v.id) ? 'bg-fuchsia-500/10' : 'hover:bg-white/5'}`}>
                   <td className="px-4 py-4">
-                    <button onClick={() => toggleSelect(v.id)} className="text-gray-400 hover:text-white">
+                    <button onClick={() => toggleSelect(v.id)} className="text-gray-400 hover:text-white transition-colors">
                       {selected.has(v.id) ? (
-                        <CheckSquare className="w-5 h-5 text-blue-400" />
+                        <CheckSquare className="w-5 h-5 text-fuchsia-400" />
                       ) : (
                         <Square className="w-5 h-5" />
                       )}
                     </button>
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-300">{v.id}</td>
-                  <td className="px-4 py-4 text-sm text-white">
+                  <td className="px-4 py-4 text-sm text-gray-400">{v.id}</td>
+                  <td className="px-4 py-4 text-sm text-white font-medium">
                     {v.first_name.substring(0, 20)}... {v.last_name}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-300">{v.birth_date}</td>
@@ -240,7 +244,7 @@ export default function Veterans() {
                   <td className="px-4 py-4">
                     <button
                       onClick={() => handleDelete(v.id)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
+                      className="p-2 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -254,7 +258,7 @@ export default function Veterans() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-6 bg-[#12121a]/80 backdrop-blur-md rounded-2xl border border-white/10 p-4">
           <div className="text-sm text-gray-400">
             显示 {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} 条，共 {total} 条
           </div>
@@ -262,33 +266,33 @@ export default function Veterans() {
             <button
               onClick={() => setPage(1)}
               disabled={page === 1}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
-              首页
+              <ChevronsLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
-              上一页
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-3 py-1 text-gray-300">
+            <span className="px-4 py-2 text-sm text-gray-300 bg-white/5 rounded-lg border border-white/10">
               {page} / {totalPages}
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
-              下一页
+              <ChevronRight className="w-4 h-4" />
             </button>
             <button
               onClick={() => setPage(totalPages)}
               disabled={page === totalPages}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
-              末页
+              <ChevronsRight className="w-4 h-4" />
             </button>
           </div>
         </div>
