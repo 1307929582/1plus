@@ -82,6 +82,13 @@ def verify_admin(credentials: HTTPBasicCredentials = Depends(security), db: Sess
 
 # ==================== Admin Routes ====================
 
+@app.get("/api/admin/exists")
+def check_admin_exists(db: Session = Depends(get_db)):
+    """检查是否已有管理员"""
+    exists = db.query(Admin).first() is not None
+    return {"exists": exists}
+
+
 @app.post("/api/admin/init")
 def init_admin(data: AdminCreate, db: Session = Depends(get_db)):
     """初始化管理员账户（仅当没有管理员时）"""

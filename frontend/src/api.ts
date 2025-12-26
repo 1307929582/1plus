@@ -51,6 +51,7 @@ export const authApi = {
     api.post('/admin/login', { username, password }),
   init: (username: string, password: string) =>
     api.post('/admin/init', { username, password }),
+  exists: () => api.get<{ exists: boolean }>('/admin/exists'),
 };
 
 export const dashboardApi = {

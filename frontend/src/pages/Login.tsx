@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { authApi } from '../api';
 import { Shield } from 'lucide-react';
 
@@ -12,6 +12,16 @@ export default function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isInit, setIsInit] = useState(false);
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    authApi.exists().then(res => {
+      setAdminExists(res.data.exists);
+      if (!res.data.exists) {
+        setIsInit(true);
+      }
+    }).catch(() => setAdminExists(true));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +38,7 @@ export default function Login({ onLogin }: LoginProps) {
       if (err.response?.status === 400 && err.response?.data?.detail === 'Admin already exists') {
         setError('管理员已存在，请直接登录');
         setIsInit(false);
+        setAdminExists(true);
       } else if (err.response?.status === 401) {
         setError('用户名或密码错误');
       } else {
@@ -99,14 +110,16 @@ export default function Login({ onLogin }: LoginProps) {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsInit(!isInit)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              {isInit ? '已有账户？点击登录' : '首次使用？创建管理员'}
-            </button>
-          </div>
+          {adminExists && (
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => setIsInit(!isInit)}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                {isInit ? '已有账户？点击登录' : '首次使用？创建管理员'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
