@@ -42,6 +42,7 @@ show_menu() {
     echo -e "  ${YELLOW}8)${NC}  数据库备份     - 备份 SQLite 数据库"
     echo -e "  ${YELLOW}9)${NC}  数据库重置     - 重置数据库 (危险)"
     echo -e "  ${YELLOW}10)${NC} 重新部署       - 重新安装依赖并构建"
+    echo -e "  ${YELLOW}11)${NC} 更新系统       - 拉取最新代码并重建"
     echo -e "  ${YELLOW}0)${NC}  退出"
     echo ""
 }
@@ -317,6 +318,57 @@ redeploy() {
     echo -e "${GREEN}═══════════════════ 部署完成 ═══════════════════${NC}"
 }
 
+update() {
+    echo -e "${CYAN}═══════════════════ 更新系统 ═══════════════════${NC}"
+    echo ""
+
+    # 检查是否是 git 仓库
+    if [ ! -d "$PROJECT_DIR/.git" ]; then
+        echo -e "${RED}错误: 当前目录不是 Git 仓库${NC}"
+        return 1
+    fi
+
+    # 停止服务
+    echo -e "${BLUE}1. 停止现有服务...${NC}"
+    stop_frontend
+    stop_backend
+
+    # 拉取最新代码
+    echo -e "${BLUE}2. 拉取最新代码...${NC}"
+    cd "$PROJECT_DIR"
+    git pull
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Git pull 失败，请检查网络或解决冲突${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 代码已更新${NC}"
+
+    # 更新后端依赖
+    echo -e "${BLUE}3. 更新后端依赖...${NC}"
+    cd "$BACKEND_DIR"
+    if [ ! -d "venv" ]; then
+        python3 -m venv venv
+    fi
+    source venv/bin/activate
+    pip install -q -r requirements.txt
+    echo -e "${GREEN}✓ 后端依赖已更新${NC}"
+
+    # 更新前端依赖并构建
+    echo -e "${BLUE}4. 更新前端依赖并构建...${NC}"
+    cd "$FRONTEND_DIR"
+    npm install --silent
+    npm run build
+    echo -e "${GREEN}✓ 前端已构建${NC}"
+
+    # 启动服务
+    echo -e "${BLUE}5. 启动服务...${NC}"
+    start_backend
+    start_frontend
+
+    echo ""
+    echo -e "${GREEN}═══════════════════ 更新完成 ═══════════════════${NC}"
+}
+
 show_help() {
     show_logo
     echo -e "${GREEN}用法: ./manage.sh [命令]${NC}"
@@ -332,6 +384,7 @@ show_help() {
     echo "  db-backup, db     备份数据库"
     echo "  db-reset          重置数据库"
     echo "  redeploy, rd      重新部署"
+    echo "  update, u         更新系统 (git pull + 重建)"
     echo "  help, h           显示帮助"
     echo ""
     echo "示例:"
@@ -383,6 +436,10 @@ case "$1" in
         redeploy
         exit 0
         ;;
+    update|u)
+        update
+        exit 0
+        ;;
     help|h|--help|-h)
         show_help
         exit 0
@@ -395,7 +452,7 @@ show_logo
 
 while true; do
     show_menu
-    read -p "请输入选项 [0-10]: " choice
+    read -p "请输入选项 [0-11]: " choice
     echo ""
 
     case $choice in
@@ -409,6 +466,7 @@ while true; do
         8) db_backup ;;
         9) db_reset ;;
         10) redeploy ;;
+        11) update ;;
         0)
             echo -e "${GREEN}再见！${NC}"
             exit 0
