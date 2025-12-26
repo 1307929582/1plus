@@ -11,8 +11,18 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-PROJECT_DIR=$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")
-PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
+# 正确解析符号链接获取真实脚本路径
+SOURCE="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    LINK="$(readlink "$SOURCE")"
+    if [[ "$LINK" != /* ]]; then
+        SOURCE="$DIR/$LINK"
+    else
+        SOURCE="$LINK"
+    fi
+done
+PROJECT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 PID_DIR="$PROJECT_DIR/.pids"
