@@ -576,8 +576,10 @@ def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(
     if code.expires_at and code.expires_at < datetime.utcnow():
         return {"success": False, "error": "兑换码已过期"}
 
-    # 获取待验证的退伍军人
-    veteran = db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).first()
+    # 获取待验证的退伍军人（使用行锁防止竞态条件）
+    veteran = db.query(Veteran).filter(
+        Veteran.status == VerificationStatus.PENDING
+    ).with_for_update(skip_locked=True).first()
     if not veteran:
         return {"success": False, "error": "没有待验证的退伍军人"}
 

@@ -141,13 +141,15 @@ export default function Verify() {
     setLoading(true);
     setResult(null);
 
+    let veteran: VeteranData | null = null;
+
     try {
       // 1. 从后端获取退伍军人数据
       const veteranRes = await verifyApi.getVeteran(code);
       if (!veteranRes.data.success) {
         throw new Error(veteranRes.data.error || '获取验证数据失败');
       }
-      const veteran = veteranRes.data.veteran as VeteranData;
+      veteran = veteranRes.data.veteran as VeteranData;
       setVeteranData(veteran);
 
       // 2. 提取 verificationId
@@ -202,8 +204,6 @@ export default function Verify() {
       });
 
       const infoData = await infoRes.json();
-      console.log('Personal info response:', infoData);
-
       const currentStep = infoData.currentStep || 'unknown';
 
       if (currentStep === 'emailLoop') {
@@ -224,7 +224,14 @@ export default function Verify() {
         setResult({ success: true, message: `状态: ${currentStep}` });
       }
     } catch (err: any) {
-      console.error('Step 1 error:', err);
+      // 错误时恢复 veteran 状态
+      if (veteran) {
+        try {
+          await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, false, email);
+        } catch {
+          // 忽略恢复错误
+        }
+      }
       setResult({
         success: false,
         message: err.message || '验证失败',
@@ -266,8 +273,6 @@ export default function Verify() {
       });
 
       const data = await res.json();
-      console.log('Email loop response:', data);
-
       const currentStep = data.currentStep || 'unknown';
 
       if (currentStep === 'success') {
