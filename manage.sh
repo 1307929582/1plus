@@ -2,6 +2,7 @@
 
 # SheerID Veteran Verification Tool - CLI Manager
 # 用法: ./manage.sh [命令]
+# 生产环境建议使用 nginx 服务前端，只需启动后端
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,6 +32,12 @@ DB_FILE="$BACKEND_DIR/sheerid_veteran.db"
 
 BACKEND_PORT=14100
 FRONTEND_PORT=14000
+
+# 检测是否为生产环境（Linux 且非 localhost）
+IS_PRODUCTION=false
+if [[ "$(uname)" == "Linux" ]]; then
+    IS_PRODUCTION=true
+fi
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
@@ -220,6 +227,22 @@ start_backend() {
 }
 
 start_frontend() {
+    # 生产环境建议使用 nginx
+    if [ "$IS_PRODUCTION" = true ]; then
+        echo -e "${YELLOW}生产环境建议使用 nginx 服务前端静态文件${NC}"
+        echo -e "${YELLOW}配置文件: nginx/sheerid.conf${NC}"
+        echo -e "${YELLOW}如果已配置 nginx，前端会自动通过 nginx 服务${NC}"
+        echo ""
+
+        # 检查 nginx 是否在运行
+        if command -v nginx &> /dev/null && pgrep nginx > /dev/null; then
+            echo -e "${GREEN}✓ nginx 正在运行，前端由 nginx 服务${NC}"
+            return 0
+        fi
+
+        echo -e "${YELLOW}nginx 未运行，使用 vite preview 作为备选...${NC}"
+    fi
+
     echo -e "${BLUE}启动前端服务...${NC}"
 
     # 确保端口空闲
