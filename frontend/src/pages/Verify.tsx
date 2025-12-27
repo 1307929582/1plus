@@ -103,16 +103,26 @@ export default function Verify() {
     return null;
   };
 
-  // 获取 UDID 作为指纹
-  const fetchUdid = async (): Promise<string> => {
-    try {
-      const resp = await fetch('https://fn.us.fd.sheerid.com/udid/udid.json');
-      const data = await resp.json();
-      return String(data.udid || '');
-    } catch {
-      // 降级：生成随机指纹
-      return Math.random().toString(36).substring(2, 15);
+  // 获取稳定的设备指纹（优先从 localStorage，其次尝试 SheerID UDID）
+  const getStableFingerprint = async (): Promise<string> => {
+    const STORAGE_KEY = 'sheerid_device_fingerprint';
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && stored.length >= 10) {
+      return stored;
     }
+    let fp = '';
+    try {
+      const resp = await fetch('https://fn.us.fd.sheerid.com/udid/udid.json', {
+        credentials: 'include',
+      });
+      const data = await resp.json();
+      fp = String(data.udid || '');
+    } catch {}
+    if (!fp || fp.length < 10) {
+      fp = crypto.randomUUID().replace(/-/g, '').substring(0, 24);
+    }
+    localStorage.setItem(STORAGE_KEY, fp);
+    return fp;
   };
 
   // 从 token 输入中提取 emailToken
@@ -168,7 +178,7 @@ export default function Verify() {
       setVerificationId(verId);
 
       // 3. 获取指纹（从用户浏览器）
-      const udid = await fetchUdid();
+      const udid = await getStableFingerprint();
       setFingerprint(udid);
 
       const headers = {

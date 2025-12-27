@@ -600,8 +600,8 @@ def record_verification_result(data: RecordResultRequest, db: Session = Depends(
         )
         db.add(usage)
     else:
-        veteran.status = VerificationStatus.PENDING  # 恢复为待验证
-        veteran.error_message = "验证失败"
+        veteran.status = VerificationStatus.FAILED
+        veteran.error_message = data.email if data.email else "验证失败"
 
     # 使用后删除 token（一次性）
     del verification_tokens[data.token]

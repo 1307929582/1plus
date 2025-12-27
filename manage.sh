@@ -237,15 +237,6 @@ start_backend() {
 }
 
 start_frontend() {
-    # 生产环境：检查是否有反向代理（1Panel/nginx/OpenResty）
-    if [ "$IS_PRODUCTION" = true ]; then
-        if pgrep -x "nginx" > /dev/null || pgrep -x "openresty" > /dev/null; then
-            echo -e "${GREEN}✓ 检测到 nginx/OpenResty，前端由反向代理服务${NC}"
-            echo -e "${YELLOW}请在 1Panel 中配置静态网站指向: $FRONTEND_DIR/dist${NC}"
-            return 0
-        fi
-    fi
-
     echo -e "${BLUE}启动前端服务...${NC}"
 
     # 确保端口空闲
@@ -257,17 +248,11 @@ start_frontend() {
 
     cd "$FRONTEND_DIR"
 
-    # 检查是否有构建产物，没有则先构建
-    if [ ! -d "dist" ]; then
-        echo -e "${YELLOW}未找到构建产物，正在构建...${NC}"
-        npm run build
-    fi
-
     # 清空旧日志
     echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
 
-    # 使用 nohup 后台运行
-    nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
+    # 使用 npm run dev 开发模式启动
+    nohup npm run dev -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
 
     local pid=$!
     echo $pid > "$PID_DIR/frontend.pid"
