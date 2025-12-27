@@ -85,8 +85,11 @@ export default function Verify() {
         setEmail('');
         // 更新本地存储的兑换码使用次数
         if (userCodes.length > 0) {
+          const usedCode = code.toUpperCase();
           const updatedCodes = userCodes.map(c =>
-            c.code === code ? { ...c, used_count: c.used_count + 1 } : c
+            c.code.toUpperCase() === usedCode
+              ? { ...c, used_count: c.total_uses - res.data.remaining_uses }
+              : c
           );
           setUserCodes(updatedCodes);
           localStorage.setItem('linuxdo_codes', JSON.stringify(updatedCodes));
