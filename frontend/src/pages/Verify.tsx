@@ -45,6 +45,7 @@ export default function Verify() {
   const [verificationId, setVerificationId] = useState('');
   const [veteranData, setVeteranData] = useState<VeteranData | null>(null);
   const [fingerprint, setFingerprint] = useState('');
+  const [verifyToken, setVerifyToken] = useState('');  // 后端验证 token
 
   const [result, setResult] = useState<{
     success: boolean;
@@ -142,6 +143,7 @@ export default function Verify() {
     setResult(null);
 
     let veteran: VeteranData | null = null;
+    let backendToken = '';
 
     try {
       // 1. 从后端获取退伍军人数据
@@ -150,7 +152,9 @@ export default function Verify() {
         throw new Error(veteranRes.data.error || '获取验证数据失败');
       }
       veteran = veteranRes.data.veteran as VeteranData;
+      backendToken = veteranRes.data.token || '';
       setVeteranData(veteran);
+      setVerifyToken(backendToken);
 
       // 2. 提取 verificationId
       const verId = extractVerificationId(url);
@@ -214,7 +218,7 @@ export default function Verify() {
         });
       } else if (currentStep === 'success') {
         // 直接成功，记录结果
-        await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, true, email);
+        await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, true, email, backendToken);
         setResult({ success: true, message: '验证成功！' });
         resetForm();
       } else if (currentStep === 'error') {
@@ -225,9 +229,9 @@ export default function Verify() {
       }
     } catch (err: any) {
       // 错误时恢复 veteran 状态
-      if (veteran) {
+      if (veteran && backendToken) {
         try {
-          await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, false, email);
+          await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, false, email, backendToken);
         } catch {
           // 忽略恢复错误
         }
@@ -277,8 +281,8 @@ export default function Verify() {
 
       if (currentStep === 'success') {
         // 记录验证成功
-        if (veteranData) {
-          await verifyApi.recordResult(veteranData.veteran_id, veteranData.code_id, true, email);
+        if (veteranData && verifyToken) {
+          await verifyApi.recordResult(veteranData.veteran_id, veteranData.code_id, true, email, verifyToken);
         }
         setResult({ success: true, message: '验证成功！' });
         resetForm();
@@ -289,7 +293,6 @@ export default function Verify() {
         setResult({ success: true, message: `状态: ${currentStep}` });
       }
     } catch (err: any) {
-      console.error('Step 2 error:', err);
       setResult({
         success: false,
         message: err.message || '验证失败',
@@ -307,6 +310,7 @@ export default function Verify() {
     setVerificationId('');
     setVeteranData(null);
     setFingerprint('');
+    setVerifyToken('');
     if (userCodes.length > 0) {
       const usedCode = code.toUpperCase();
       const updatedCodes = userCodes.map(c =>

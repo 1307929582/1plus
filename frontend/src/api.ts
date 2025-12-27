@@ -86,6 +86,7 @@ export const verifyApi = {
   getVeteran: (code: string) =>
     api.post<{
       success: boolean;
+      token?: string;  // 验证 token，用于 recordResult
       veteran?: {
         first_name: string;
         last_name: string;
@@ -99,8 +100,8 @@ export const verifyApi = {
       error?: string;
     }>('/verify/get-veteran', { code }),
   // 记录验证结果
-  recordResult: (veteran_id: number, code_id: number, success: boolean, email: string) =>
-    api.post('/verify/record-result', { veteran_id, code_id, success, email }),
+  recordResult: (veteran_id: number, code_id: number, success: boolean, email: string, token: string) =>
+    api.post('/verify/record-result', { veteran_id, code_id, success, email, token }),
 };
 
 export const logsApi = {

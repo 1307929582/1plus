@@ -551,6 +551,12 @@ def verify_step2(data: VerifyStep2Request, db: Session = Depends(get_db)):
 
 # ==================== Frontend-Direct Verification ====================
 
+import secrets
+
+# 存储验证会话 token（防止伪造请求）
+verification_tokens = {}  # token -> {veteran_id, code_id, created_at}
+
+
 class GetVeteranRequest(BaseModel):
     code: str
 
@@ -560,6 +566,7 @@ class RecordResultRequest(BaseModel):
     code_id: int
     success: bool
     email: str
+    token: str  # 验证 token，防止伪造
 
 
 @app.post("/api/verify/get-veteran")
@@ -587,8 +594,23 @@ def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(
     veteran.status = VerificationStatus.EMAIL_SENT
     db.commit()
 
+    # 生成一次性验证 token
+    token = secrets.token_urlsafe(32)
+    verification_tokens[token] = {
+        "veteran_id": veteran.id,
+        "code_id": code.id,
+        "created_at": datetime.utcnow()
+    }
+
+    # 清理过期 token（超过 1 小时）
+    expired = [k for k, v in verification_tokens.items()
+               if (datetime.utcnow() - v["created_at"]).total_seconds() > 3600]
+    for k in expired:
+        del verification_tokens[k]
+
     return {
         "success": True,
+        "token": token,  # 返回验证 token
         "veteran": {
             "first_name": veteran.first_name,
             "last_name": veteran.last_name,
@@ -605,6 +627,15 @@ def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(
 @app.post("/api/verify/record-result")
 def record_verification_result(data: RecordResultRequest, db: Session = Depends(get_db)):
     """记录前端直接验证的结果"""
+    # 验证 token
+    token_data = verification_tokens.get(data.token)
+    if not token_data:
+        return {"success": False, "error": "无效或过期的验证会话"}
+
+    # 验证 token 对应的 veteran_id 和 code_id
+    if token_data["veteran_id"] != data.veteran_id or token_data["code_id"] != data.code_id:
+        return {"success": False, "error": "验证数据不匹配"}
+
     veteran = db.query(Veteran).filter(Veteran.id == data.veteran_id).first()
     code = db.query(RedeemCode).filter(RedeemCode.id == data.code_id).first()
 
@@ -629,6 +660,9 @@ def record_verification_result(data: RecordResultRequest, db: Session = Depends(
     else:
         veteran.status = VerificationStatus.PENDING  # 恢复为待验证
         veteran.error_message = "验证失败"
+
+    # 使用后删除 token（一次性）
+    del verification_tokens[data.token]
 
     db.commit()
     return {"success": True}
