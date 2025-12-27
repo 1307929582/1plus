@@ -572,69 +572,74 @@ class RecordResultRequest(BaseModel):
 @app.post("/api/verify/get-veteran")
 def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(get_db)):
     """获取退伍军人数据供前端直接调用 SheerID"""
-    import logging
-    logger = logging.getLogger(__name__)
+    try:
+        print(f"[DEBUG] get-veteran called with code: {data.code}", flush=True)
 
-    logger.info(f"get-veteran called with code: {data.code}")
+        # 验证兑换码
+        code = db.query(RedeemCode).filter(RedeemCode.code == data.code.upper()).first()
+        if not code:
+            print(f"[DEBUG] Code not found: {data.code}", flush=True)
+            return {"success": False, "error": "兑换码不存在"}
+        if not code.is_active:
+            print(f"[DEBUG] Code inactive: {data.code}", flush=True)
+            return {"success": False, "error": "兑换码已禁用"}
+        if code.used_count >= code.total_uses:
+            print(f"[DEBUG] Code exhausted: {data.code}, used={code.used_count}, total={code.total_uses}", flush=True)
+            return {"success": False, "error": "兑换码已用完"}
+        if code.expires_at and code.expires_at < datetime.utcnow():
+            print(f"[DEBUG] Code expired: {data.code}", flush=True)
+            return {"success": False, "error": "兑换码已过期"}
 
-    # 验证兑换码
-    code = db.query(RedeemCode).filter(RedeemCode.code == data.code.upper()).first()
-    if not code:
-        logger.warning(f"Code not found: {data.code}")
-        return {"success": False, "error": "兑换码不存在"}
-    if not code.is_active:
-        logger.warning(f"Code inactive: {data.code}")
-        return {"success": False, "error": "兑换码已禁用"}
-    if code.used_count >= code.total_uses:
-        logger.warning(f"Code exhausted: {data.code}, used={code.used_count}, total={code.total_uses}")
-        return {"success": False, "error": "兑换码已用完"}
-    if code.expires_at and code.expires_at < datetime.utcnow():
-        logger.warning(f"Code expired: {data.code}")
-        return {"success": False, "error": "兑换码已过期"}
+        print(f"[DEBUG] Code valid: {data.code}", flush=True)
 
-    # 获取待验证的退伍军人
-    # 注意：SQLite 不支持 FOR UPDATE，使用普通查询
-    veteran = db.query(Veteran).filter(
-        Veteran.status == VerificationStatus.PENDING
-    ).first()
-    if not veteran:
-        logger.warning("No pending veterans found")
-        return {"success": False, "error": "没有待验证的退伍军人"}
+        # 获取待验证的退伍军人
+        veteran = db.query(Veteran).filter(
+            Veteran.status == VerificationStatus.PENDING
+        ).first()
+        if not veteran:
+            print("[DEBUG] No pending veterans found", flush=True)
+            return {"success": False, "error": "没有待验证的退伍军人"}
 
-    logger.info(f"Found veteran id={veteran.id}, marking as EMAIL_SENT")
+        print(f"[DEBUG] Found veteran id={veteran.id}", flush=True)
 
-    # 标记为处理中
-    veteran.status = VerificationStatus.EMAIL_SENT
-    db.commit()
+        # 标记为处理中
+        veteran.status = VerificationStatus.EMAIL_SENT
+        db.commit()
 
-    # 生成一次性验证 token
-    token = secrets.token_urlsafe(32)
-    verification_tokens[token] = {
-        "veteran_id": veteran.id,
-        "code_id": code.id,
-        "created_at": datetime.utcnow()
-    }
-
-    # 清理过期 token（超过 1 小时）
-    expired = [k for k, v in verification_tokens.items()
-               if (datetime.utcnow() - v["created_at"]).total_seconds() > 3600]
-    for k in expired:
-        del verification_tokens[k]
-
-    return {
-        "success": True,
-        "token": token,  # 返回验证 token
-        "veteran": {
-            "first_name": veteran.first_name,
-            "last_name": veteran.last_name,
-            "birth_date": veteran.birth_date,
-            "discharge_date": veteran.discharge_date,
-            "org_id": veteran.org_id,
-            "org_name": veteran.org_name,
+        # 生成一次性验证 token
+        token = secrets.token_urlsafe(32)
+        verification_tokens[token] = {
             "veteran_id": veteran.id,
-            "code_id": code.id
+            "code_id": code.id,
+            "created_at": datetime.utcnow()
         }
-    }
+
+        # 清理过期 token（超过 1 小时）
+        expired = [k for k, v in verification_tokens.items()
+                   if (datetime.utcnow() - v["created_at"]).total_seconds() > 3600]
+        for k in expired:
+            del verification_tokens[k]
+
+        print(f"[DEBUG] Returning success with token", flush=True)
+        return {
+            "success": True,
+            "token": token,
+            "veteran": {
+                "first_name": veteran.first_name,
+                "last_name": veteran.last_name,
+                "birth_date": veteran.birth_date,
+                "discharge_date": veteran.discharge_date,
+                "org_id": veteran.org_id,
+                "org_name": veteran.org_name,
+                "veteran_id": veteran.id,
+                "code_id": code.id
+            }
+        }
+    except Exception as e:
+        print(f"[ERROR] get-veteran exception: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": f"服务器错误: {str(e)}"}
 
 
 @app.post("/api/verify/record-result")
