@@ -92,16 +92,14 @@ export default function Verify() {
     alert('已复制并填入兑换码');
   };
 
-  // 从 URL 提取 verificationId
+  // 从 URL 提取 verificationId（优先使用查询参数中的）
   const extractVerificationId = (verifyUrl: string): string | null => {
-    const patterns = [
-      /\/verify\/([a-f0-9]{24})/i,
-      /[?&]verificationId=([a-f0-9]{24})/i,
-    ];
-    for (const pattern of patterns) {
-      const match = verifyUrl.match(pattern);
-      if (match) return match[1];
-    }
+    // 优先从查询参数提取（这是真正有效的 ID）
+    const queryMatch = verifyUrl.match(/[?&]verificationId=([a-f0-9]{24})/i);
+    if (queryMatch) return queryMatch[1];
+    // 降级：从路径提取
+    const pathMatch = verifyUrl.match(/\/verify\/([a-f0-9]{24})/i);
+    if (pathMatch) return pathMatch[1];
     return null;
   };
 
@@ -142,6 +140,10 @@ export default function Verify() {
     setLoading(true);
     setResult(null);
 
+    // 直接从 input 获取最新值，避免 state 延迟问题
+    const urlInput = document.getElementById('verify-url-input') as HTMLInputElement;
+    const currentUrl = urlInput?.value || url;
+
     let veteran: VeteranData | null = null;
     let backendToken = '';
 
@@ -157,7 +159,9 @@ export default function Verify() {
       setVerifyToken(backendToken);
 
       // 2. 提取 verificationId
-      const verId = extractVerificationId(url);
+      const verId = extractVerificationId(currentUrl);
+      console.log('[DEBUG] Input URL:', currentUrl);
+      console.log('[DEBUG] Extracted verificationId:', verId);
       if (!verId) {
         throw new Error('无法从 URL 提取 verificationId');
       }
@@ -198,7 +202,7 @@ export default function Verify() {
         locale: 'en-US',
         organization: { id: veteran.org_id, name: veteran.org_name },
         deviceFingerprintHash: udid,
-        metadata: { marketConsentValue: false, refererUrl: url },
+        metadata: { marketConsentValue: false, refererUrl: currentUrl },
       };
 
       const infoRes = await fetch(infoUrl, {
@@ -453,6 +457,7 @@ export default function Verify() {
                     验证链接
                   </label>
                   <input
+                    id="verify-url-input"
                     type="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
