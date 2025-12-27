@@ -29,6 +29,9 @@ PID_DIR="$PROJECT_DIR/.pids"
 LOG_DIR="$PROJECT_DIR/logs"
 DB_FILE="$BACKEND_DIR/sheerid_veteran.db"
 
+BACKEND_PORT=14100
+FRONTEND_PORT=14000
+
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
 show_logo() {
@@ -57,6 +60,33 @@ show_menu() {
     echo ""
 }
 
+# 强制杀掉占用指定端口的所有进程
+kill_port() {
+    local port=$1
+    local pids=$(lsof -ti:$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+        echo -e "${YELLOW}杀掉占用端口 $port 的进程: $pids${NC}"
+        echo "$pids" | xargs kill -9 2>/dev/null
+        sleep 1
+    fi
+}
+
+# 等待端口释放
+wait_port_free() {
+    local port=$1
+    local max_wait=10
+    local count=0
+    while lsof -ti:$port >/dev/null 2>&1; do
+        if [ $count -ge $max_wait ]; then
+            echo -e "${RED}端口 $port 无法释放${NC}"
+            return 1
+        fi
+        sleep 1
+        ((count++))
+    done
+    return 0
+}
+
 is_running() {
     local pid_file="$PID_DIR/$1.pid"
     if [ -f "$pid_file" ]; then
@@ -81,7 +111,7 @@ status() {
 
     if is_running "backend"; then
         echo -e "  后端服务 (API)   : ${GREEN}● 运行中${NC} (PID: $(get_pid backend))"
-        echo -e "                     ${BLUE}http://localhost:14100${NC}"
+        echo -e "                     ${BLUE}http://localhost:$BACKEND_PORT${NC}"
     else
         echo -e "  后端服务 (API)   : ${RED}○ 未运行${NC}"
     fi
@@ -90,8 +120,8 @@ status() {
 
     if is_running "frontend"; then
         echo -e "  前端服务 (Vite)  : ${GREEN}● 运行中${NC} (PID: $(get_pid frontend))"
-        echo -e "                     ${BLUE}http://localhost:14000${NC}"
-        echo -e "                     ${BLUE}http://localhost:14000/admin${NC}"
+        echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT${NC}"
+        echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT/admin${NC}"
     else
         echo -e "  前端服务 (Vite)  : ${RED}○ 未运行${NC}"
     fi
@@ -109,13 +139,55 @@ status() {
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }
 
-start_backend() {
+stop_backend() {
+    echo -e "${BLUE}停止后端服务...${NC}"
+
+    # 先尝试优雅停止
     if is_running "backend"; then
-        echo -e "${YELLOW}后端服务已在运行 (PID: $(get_pid backend))${NC}"
-        return 0
+        local pid=$(get_pid backend)
+        kill "$pid" 2>/dev/null
+        sleep 2
     fi
 
+    # 强制杀掉端口上的所有进程
+    kill_port $BACKEND_PORT
+
+    # 清理 PID 文件
+    rm -f "$PID_DIR/backend.pid"
+
+    echo -e "${GREEN}✓ 后端服务已停止${NC}"
+}
+
+stop_frontend() {
+    echo -e "${BLUE}停止前端服务...${NC}"
+
+    # 先尝试优雅停止
+    if is_running "frontend"; then
+        local pid=$(get_pid frontend)
+        kill "$pid" 2>/dev/null
+        pkill -P "$pid" 2>/dev/null
+        sleep 2
+    fi
+
+    # 强制杀掉端口上的所有进程
+    kill_port $FRONTEND_PORT
+
+    # 清理 PID 文件
+    rm -f "$PID_DIR/frontend.pid"
+
+    echo -e "${GREEN}✓ 前端服务已停止${NC}"
+}
+
+start_backend() {
     echo -e "${BLUE}启动后端服务...${NC}"
+
+    # 确保端口空闲
+    kill_port $BACKEND_PORT
+    if ! wait_port_free $BACKEND_PORT; then
+        echo -e "${RED}✗ 端口 $BACKEND_PORT 被占用，无法启动${NC}"
+        return 1
+    fi
+
     cd "$BACKEND_DIR"
 
     # 确定 Python 路径
@@ -128,7 +200,7 @@ start_backend() {
         PYTHON_BIN="python3"
     fi
 
-    nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port 14100 > "$LOG_DIR/backend.log" 2>&1 &
+    nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT > "$LOG_DIR/backend.log" 2>&1 &
     echo $! > "$PID_DIR/backend.pid"
 
     sleep 2
@@ -141,16 +213,16 @@ start_backend() {
 }
 
 start_frontend() {
-    if is_running "frontend"; then
-        echo -e "${YELLOW}前端服务已在运行 (PID: $(get_pid frontend))${NC}"
-        return 0
+    echo -e "${BLUE}启动前端服务...${NC}"
+
+    # 确保端口空闲
+    kill_port $FRONTEND_PORT
+    if ! wait_port_free $FRONTEND_PORT; then
+        echo -e "${RED}✗ 端口 $FRONTEND_PORT 被占用，无法启动${NC}"
+        return 1
     fi
 
-    echo -e "${BLUE}启动前端服务...${NC}"
     cd "$FRONTEND_DIR"
-
-    # 先杀掉占用端口的进程
-    lsof -ti:14000 | xargs kill -9 2>/dev/null
 
     # 检查是否有构建产物，没有则先构建
     if [ ! -d "dist" ]; then
@@ -159,7 +231,7 @@ start_frontend() {
     fi
 
     # 生产模式：使用 preview 服务静态文件
-    nohup npm run preview -- --port 14000 --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
+    nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid"
 
     sleep 3
@@ -171,33 +243,6 @@ start_frontend() {
     fi
 }
 
-stop_backend() {
-    if ! is_running "backend"; then
-        echo -e "${YELLOW}后端服务未运行${NC}"
-        return 0
-    fi
-
-    local pid=$(get_pid backend)
-    echo -e "${BLUE}停止后端服务 (PID: $pid)...${NC}"
-    kill "$pid" 2>/dev/null
-    rm -f "$PID_DIR/backend.pid"
-    echo -e "${GREEN}✓ 后端服务已停止${NC}"
-}
-
-stop_frontend() {
-    if ! is_running "frontend"; then
-        echo -e "${YELLOW}前端服务未运行${NC}"
-        return 0
-    fi
-
-    local pid=$(get_pid frontend)
-    echo -e "${BLUE}停止前端服务 (PID: $pid)...${NC}"
-    kill "$pid" 2>/dev/null
-    pkill -P "$pid" 2>/dev/null
-    rm -f "$PID_DIR/frontend.pid"
-    echo -e "${GREEN}✓ 前端服务已停止${NC}"
-}
-
 start() {
     echo -e "${CYAN}═══════════════════ 启动服务 ═══════════════════${NC}"
     echo ""
@@ -206,9 +251,9 @@ start() {
     echo ""
     echo -e "${GREEN}所有服务已启动！${NC}"
     echo ""
-    echo -e "  ${CYAN}后端 API:${NC}  http://localhost:14100"
-    echo -e "  ${CYAN}前端页面:${NC}  http://localhost:14000"
-    echo -e "  ${CYAN}管理后台:${NC}  http://localhost:14000/admin"
+    echo -e "  ${CYAN}后端 API:${NC}  http://localhost:$BACKEND_PORT"
+    echo -e "  ${CYAN}前端页面:${NC}  http://localhost:$FRONTEND_PORT"
+    echo -e "  ${CYAN}管理后台:${NC}  http://localhost:$FRONTEND_PORT/admin"
     echo ""
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }
@@ -236,61 +281,22 @@ restart() {
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }
 
+# 简化的日志查看函数 - 使用 tail -f，Ctrl+C 退出
 logs_backend() {
-    echo -e "${BLUE}后端日志 (按 q 退出):${NC}"
+    echo -e "${BLUE}后端日志 (按 Ctrl+C 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/backend.log" ]; then
-        local old_trap interrupted status
-        interrupted=0
-        old_trap=$(trap -p INT)
-        trap 'interrupted=1' INT
-
-        if less +F "$LOG_DIR/backend.log" 2>/dev/null; then
-            status=0
-        else
-            status=$?
-        fi
-
-        if [ "$status" -ne 0 ] && [ "$status" -ne 130 ] && [ "$interrupted" -eq 0 ]; then
-            tail -n 100 "$LOG_DIR/backend.log" || :
-        fi
-
-        if [ -n "$old_trap" ]; then
-            eval "$old_trap"
-        else
-            trap - INT
-        fi
-        return 0
+        tail -f "$LOG_DIR/backend.log"
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
 }
 
 logs_frontend() {
-    echo -e "${BLUE}前端日志 (按 q 退出):${NC}"
+    echo -e "${BLUE}前端日志 (按 Ctrl+C 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/frontend.log" ]; then
-        local old_trap interrupted status
-        interrupted=0
-        old_trap=$(trap -p INT)
-        trap 'interrupted=1' INT
-
-        if less +F "$LOG_DIR/frontend.log" 2>/dev/null; then
-            status=0
-        else
-            status=$?
-        fi
-
-        if [ "$status" -ne 0 ] && [ "$status" -ne 130 ] && [ "$interrupted" -eq 0 ]; then
-            tail -n 100 "$LOG_DIR/frontend.log" || :
-        fi
-
-        if [ -n "$old_trap" ]; then
-            eval "$old_trap"
-        else
-            trap - INT
-        fi
-        return 0
+        tail -f "$LOG_DIR/frontend.log"
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
@@ -514,9 +520,6 @@ esac
 clear
 show_logo
 
-# 捕获 Ctrl+C，防止意外退出
-trap '' INT
-
 while true; do
     show_menu
     read -p "请输入选项 [0-11]: " choice
@@ -535,7 +538,6 @@ while true; do
         10) redeploy ;;
         11) update ;;
         0)
-            trap - INT  # 恢复默认行为
             echo -e "${GREEN}再见！${NC}"
             exit 0
             ;;
