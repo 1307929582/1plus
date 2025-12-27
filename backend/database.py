@@ -1,11 +1,22 @@
 """
 数据库配置
 """
+import os
+import logging
+from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
-DATABASE_URL = "sqlite:///./sheerid_veteran.db"
+# 使用绝对路径，确保在任何工作目录下都能找到数据库
+DB_DIR = Path(__file__).parent.absolute()
+DB_PATH = DB_DIR / "sheerid_veteran.db"
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info(f"Database path: {DB_PATH}")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

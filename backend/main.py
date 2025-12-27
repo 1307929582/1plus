@@ -934,7 +934,15 @@ def proxy_status():
 
 @app.on_event("startup")
 def startup():
-    init_db()
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        logger.info("Starting application...")
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.exception(f"Failed to initialize database: {e}")
+        raise
 
 
 if __name__ == "__main__":
