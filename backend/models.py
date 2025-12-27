@@ -128,3 +128,17 @@ class OAuthSettings(Base):
     min_trust_level = Column(Integer, default=0)  # 最低信任等级限制
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProxySettings(Base):
+    __tablename__ = "proxy_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    is_enabled = Column(Boolean, default=False)
+    proxy_type = Column(String(20), default="socks5")  # http, socks5
+    host = Column(String(200), nullable=True)
+    port = Column(Integer, nullable=True)
+    username = Column(String(200), nullable=True)
+    password = Column(String(200), nullable=True)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -102,4 +102,11 @@ export const oauthApi = {
     api.get('/oauth/linuxdo/users', { params: { skip, limit } }),
 };
 
+export const proxyApi = {
+  getSettings: () => api.get('/admin/proxy/settings'),
+  updateSettings: (data: { is_enabled?: boolean; proxy_type?: string; host?: string; port?: number; username?: string; password?: string }) =>
+    api.put('/admin/proxy/settings', data),
+  test: () => api.post('/admin/proxy/test'),
+};
+
 export default api;

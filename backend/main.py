@@ -17,7 +17,7 @@ from sqlalchemy import func
 from pydantic import BaseModel
 
 from database import get_db, init_db, engine
-from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings
+from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings, ProxySettings
 from sheerid_service import verify_veteran
 from proxy_config import get_proxy_status
 
@@ -74,6 +74,15 @@ class OAuthSettingsUpdate(BaseModel):
     is_enabled: Optional[bool] = None
     codes_per_user: Optional[int] = None
     min_trust_level: Optional[int] = None
+
+
+class ProxySettingsUpdate(BaseModel):
+    is_enabled: Optional[bool] = None
+    proxy_type: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 # ==================== Auth ====================
@@ -558,6 +567,96 @@ def list_linuxdo_users(
         })
 
     return {"users": result, "total": total}
+
+
+# ==================== Proxy Settings (Admin) ====================
+
+@app.get("/api/admin/proxy/settings")
+def get_proxy_settings(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """获取代理设置"""
+    settings = db.query(ProxySettings).first()
+    if not settings:
+        settings = ProxySettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return {
+        "is_enabled": settings.is_enabled,
+        "proxy_type": settings.proxy_type or "socks5",
+        "host": settings.host or "",
+        "port": settings.port or 0,
+        "username": settings.username or "",
+        "password": "***" if settings.password else "",
+    }
+
+
+@app.put("/api/admin/proxy/settings")
+def update_proxy_settings(data: ProxySettingsUpdate, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """更新代理设置"""
+    settings = db.query(ProxySettings).first()
+    if not settings:
+        settings = ProxySettings()
+        db.add(settings)
+
+    if data.is_enabled is not None:
+        settings.is_enabled = data.is_enabled
+    if data.proxy_type is not None:
+        settings.proxy_type = data.proxy_type
+    if data.host is not None:
+        settings.host = data.host
+    if data.port is not None:
+        settings.port = data.port
+    if data.username is not None:
+        settings.username = data.username
+    if data.password is not None and data.password != "***":
+        settings.password = data.password
+
+    db.commit()
+    return {"message": "代理设置已更新"}
+
+
+@app.post("/api/admin/proxy/test")
+def test_proxy(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """测试代理连接"""
+    import subprocess
+    settings = db.query(ProxySettings).first()
+    if not settings or not settings.is_enabled:
+        return {"success": False, "error": "代理未启用"}
+
+    if not settings.host or not settings.port:
+        return {"success": False, "error": "代理配置不完整"}
+
+    try:
+        cmd = ["curl", "-s", "--connect-timeout", "10"]
+        if settings.proxy_type == "socks5":
+            cmd.extend(["--socks5", f"{settings.host}:{settings.port}"])
+            if settings.username and settings.password:
+                cmd.extend(["--proxy-user", f"{settings.username}:{settings.password}"])
+        else:
+            proxy_url = f"http://{settings.host}:{settings.port}"
+            if settings.username and settings.password:
+                proxy_url = f"http://{settings.username}:{settings.password}@{settings.host}:{settings.port}"
+            cmd.extend(["-x", proxy_url])
+
+        cmd.append("http://ipinfo.io")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+
+        if result.returncode == 0 and result.stdout:
+            import json
+            data = json.loads(result.stdout)
+            return {
+                "success": True,
+                "ip": data.get("ip"),
+                "city": data.get("city"),
+                "region": data.get("region"),
+                "country": data.get("country"),
+                "org": data.get("org"),
+            }
+        return {"success": False, "error": f"连接失败: {result.stderr or 'Unknown error'}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "连接超时"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ==================== Startup ====================
