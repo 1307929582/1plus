@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard';
 import Veterans from './pages/Veterans';
 import Codes from './pages/Codes';
 import Verify from './pages/Verify';
+import Settings from './pages/Settings';
+import OAuthCallback from './pages/OAuthCallback';
 import Layout from './components/Layout';
 
 function App() {
@@ -30,12 +32,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Verify />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/admin" element={
           isAuth ? <Layout onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
         }>
           <Route index element={<Dashboard />} />
           <Route path="veterans" element={<Veterans />} />
           <Route path="codes" element={<Codes />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

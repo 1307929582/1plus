@@ -46,11 +46,14 @@ class RedeemCode(Base):
     used_count = Column(Integer, default=0)  # 已使用次数
     is_active = Column(Boolean, default=True)
 
+    linuxdo_user_id = Column(Integer, ForeignKey("linuxdo_users.id"), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
 
     # 关联使用记录
     usages = relationship("CodeUsage", back_populates="redeem_code")
+    linuxdo_user = relationship("LinuxDOUser", back_populates="codes")
 
 
 class CodeUsage(Base):
@@ -95,3 +98,32 @@ class VerificationLog(Base):
     ip_address = Column(String(50), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LinuxDOUser(Base):
+    __tablename__ = "linuxdo_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    linuxdo_id = Column(Integer, unique=True, nullable=False, index=True)
+    username = Column(String(100), nullable=False)
+    name = Column(String(200), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    trust_level = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, default=datetime.utcnow)
+
+    codes = relationship("RedeemCode", back_populates="linuxdo_user")
+
+
+class OAuthSettings(Base):
+    __tablename__ = "oauth_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider = Column(String(50), unique=True, nullable=False)  # linuxdo
+    client_id = Column(String(200), nullable=True)
+    client_secret = Column(String(200), nullable=True)
+    is_enabled = Column(Boolean, default=False)
+    codes_per_user = Column(Integer, default=2)  # 每用户发放兑换码数量
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

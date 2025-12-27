@@ -5,17 +5,19 @@ import csv
 import io
 import secrets
 import hashlib
+import httpx
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 
 from database import get_db, init_db, engine
-from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus
+from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings
 from sheerid_service import verify_veteran
 
 app = FastAPI(title="SheerID Veteran Verification API", version="1.0.0")
@@ -63,6 +65,13 @@ class DashboardStats(BaseModel):
     total_codes: int
     active_codes: int
     total_verifications_today: int
+
+
+class OAuthSettingsUpdate(BaseModel):
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    is_enabled: Optional[bool] = None
+    codes_per_user: Optional[int] = None
 
 
 # ==================== Auth ====================
@@ -336,6 +345,177 @@ def get_logs(
 ):
     usages = db.query(CodeUsage).order_by(CodeUsage.id.desc()).offset(skip).limit(limit).all()
     return {"logs": usages}
+
+
+# ==================== OAuth Settings (Admin) ====================
+
+@app.get("/api/admin/oauth/settings")
+def get_oauth_settings(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """获取 OAuth 设置"""
+    settings = db.query(OAuthSettings).filter(OAuthSettings.provider == "linuxdo").first()
+    if not settings:
+        settings = OAuthSettings(provider="linuxdo")
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return {
+        "client_id": settings.client_id or "",
+        "client_secret": "***" if settings.client_secret else "",
+        "is_enabled": settings.is_enabled,
+        "codes_per_user": settings.codes_per_user
+    }
+
+
+@app.put("/api/admin/oauth/settings")
+def update_oauth_settings(data: OAuthSettingsUpdate, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """更新 OAuth 设置"""
+    settings = db.query(OAuthSettings).filter(OAuthSettings.provider == "linuxdo").first()
+    if not settings:
+        settings = OAuthSettings(provider="linuxdo")
+        db.add(settings)
+
+    if data.client_id is not None:
+        settings.client_id = data.client_id
+    if data.client_secret is not None and data.client_secret != "***":
+        settings.client_secret = data.client_secret
+    if data.is_enabled is not None:
+        settings.is_enabled = data.is_enabled
+    if data.codes_per_user is not None:
+        settings.codes_per_user = data.codes_per_user
+
+    db.commit()
+    return {"message": "设置已更新"}
+
+
+# ==================== LinuxDO OAuth ====================
+
+LINUXDO_AUTHORIZE_URL = "https://connect.linux.do/oauth2/authorize"
+LINUXDO_TOKEN_URL = "https://connect.linux.do/oauth2/token"
+LINUXDO_USER_URL = "https://connect.linux.do/api/user"
+
+
+@app.get("/api/oauth/linuxdo/status")
+def get_linuxdo_oauth_status(db: Session = Depends(get_db)):
+    """检查 LinuxDO OAuth 是否启用"""
+    settings = db.query(OAuthSettings).filter(OAuthSettings.provider == "linuxdo").first()
+    return {"enabled": settings.is_enabled if settings else False}
+
+
+@app.get("/api/oauth/linuxdo/login")
+def linuxdo_login(redirect_uri: str = Query(...), db: Session = Depends(get_db)):
+    """重定向到 LinuxDO 授权页"""
+    settings = db.query(OAuthSettings).filter(OAuthSettings.provider == "linuxdo").first()
+    if not settings or not settings.is_enabled or not settings.client_id:
+        raise HTTPException(status_code=400, detail="LinuxDO OAuth 未配置")
+
+    state = secrets.token_urlsafe(16)
+    auth_url = f"{LINUXDO_AUTHORIZE_URL}?client_id={settings.client_id}&response_type=code&redirect_uri={redirect_uri}&state={state}"
+    return {"auth_url": auth_url, "state": state}
+
+
+@app.post("/api/oauth/linuxdo/callback")
+async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(get_db)):
+    """处理 LinuxDO OAuth 回调"""
+    settings = db.query(OAuthSettings).filter(OAuthSettings.provider == "linuxdo").first()
+    if not settings or not settings.client_id or not settings.client_secret:
+        raise HTTPException(status_code=400, detail="LinuxDO OAuth 未配置")
+
+    # 获取 access_token
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(LINUXDO_TOKEN_URL, data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": settings.client_id,
+            "client_secret": settings.client_secret
+        })
+
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="获取 token 失败")
+
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+
+        # 获取用户信息
+        user_resp = await client.get(LINUXDO_USER_URL, headers={
+            "Authorization": f"Bearer {access_token}"
+        })
+
+        if user_resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="获取用户信息失败")
+
+        user_data = user_resp.json()
+
+    linuxdo_id = user_data.get("id")
+    username = user_data.get("username")
+    name = user_data.get("name")
+    avatar_url = user_data.get("avatar_url")
+    trust_level = user_data.get("trust_level", 0)
+
+    # 查找或创建用户
+    user = db.query(LinuxDOUser).filter(LinuxDOUser.linuxdo_id == linuxdo_id).first()
+    is_new_user = False
+
+    if not user:
+        user = LinuxDOUser(
+            linuxdo_id=linuxdo_id,
+            username=username,
+            name=name,
+            avatar_url=avatar_url,
+            trust_level=trust_level
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        is_new_user = True
+
+        # 为新用户生成兑换码
+        codes_count = settings.codes_per_user or 2
+        for _ in range(codes_count):
+            code_str = secrets.token_urlsafe(8).upper()[:12]
+            new_code = RedeemCode(
+                code=code_str,
+                total_uses=1,
+                linuxdo_user_id=user.id
+            )
+            db.add(new_code)
+        db.commit()
+    else:
+        user.username = username
+        user.name = name
+        user.avatar_url = avatar_url
+        user.trust_level = trust_level
+        user.last_login = datetime.utcnow()
+        db.commit()
+
+    # 获取用户的兑换码
+    user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
+
+    return {
+        "user": {
+            "id": user.id,
+            "linuxdo_id": user.linuxdo_id,
+            "username": user.username,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "trust_level": user.trust_level
+        },
+        "codes": [{"code": c.code, "used_count": c.used_count, "total_uses": c.total_uses, "is_active": c.is_active} for c in user_codes],
+        "is_new_user": is_new_user
+    }
+
+
+@app.get("/api/oauth/linuxdo/users")
+def list_linuxdo_users(
+    skip: int = 0,
+    limit: int = 50,
+    admin: Admin = Depends(verify_admin),
+    db: Session = Depends(get_db)
+):
+    """列出所有 LinuxDO 用户"""
+    users = db.query(LinuxDOUser).order_by(LinuxDOUser.id.desc()).offset(skip).limit(limit).all()
+    total = db.query(LinuxDOUser).count()
+    return {"users": users, "total": total}
 
 
 # ==================== Startup ====================

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Ticket, LogOut, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Users, Ticket, LogOut, Sparkles, Settings } from 'lucide-react';
 
 interface LayoutProps {
   onLogout: () => void;
@@ -12,6 +12,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/admin', icon: LayoutDashboard, label: '仪表盘' },
     { path: '/admin/veterans', icon: Users, label: '退伍军人' },
     { path: '/admin/codes', icon: Ticket, label: '兑换码' },
+    { path: '/admin/settings', icon: Settings, label: '系统设置' },
   ];
 
   return (

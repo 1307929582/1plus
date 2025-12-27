@@ -89,4 +89,17 @@ export const logsApi = {
     api.get('/logs', { params: { skip, limit } }),
 };
 
+export const oauthApi = {
+  getSettings: () => api.get('/admin/oauth/settings'),
+  updateSettings: (data: { client_id?: string; client_secret?: string; is_enabled?: boolean; codes_per_user?: number }) =>
+    api.put('/admin/oauth/settings', data),
+  getStatus: () => api.get<{ enabled: boolean }>('/oauth/linuxdo/status'),
+  getLoginUrl: (redirect_uri: string) =>
+    api.get<{ auth_url: string; state: string }>('/oauth/linuxdo/login', { params: { redirect_uri } }),
+  callback: (code: string, redirect_uri: string) =>
+    api.post('/oauth/linuxdo/callback', null, { params: { code, redirect_uri } }),
+  listUsers: (skip = 0, limit = 50) =>
+    api.get('/oauth/linuxdo/users', { params: { skip, limit } }),
+};
+
 export default api;
