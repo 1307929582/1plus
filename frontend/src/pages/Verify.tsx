@@ -16,6 +16,19 @@ interface StoredCode {
   is_active: boolean;
 }
 
+interface VeteranData {
+  first_name: string;
+  last_name: string;
+  birth_date: string;
+  discharge_date: string;
+  org_id: number;
+  org_name: string;
+  veteran_id: number;
+  code_id: number;
+}
+
+const SHEERID_BASE_URL = 'https://services.sheerid.com';
+
 export default function Verify() {
   const [code, setCode] = useState('');
   const [url, setUrl] = useState('');
@@ -27,9 +40,11 @@ export default function Verify() {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [userCodes, setUserCodes] = useState<StoredCode[]>([]);
 
-  // 两步验证状态
+  // 验证状态
   const [step, setStep] = useState<1 | 2>(1);
   const [verificationId, setVerificationId] = useState('');
+  const [veteranData, setVeteranData] = useState<VeteranData | null>(null);
+  const [fingerprint, setFingerprint] = useState('');
 
   const [result, setResult] = useState<{
     success: boolean;
@@ -76,66 +91,203 @@ export default function Verify() {
     alert('已复制并填入兑换码');
   };
 
-  // 获取用户浏览器的 UDID
-  const fetchClientUdid = async (): Promise<string> => {
+  // 从 URL 提取 verificationId
+  const extractVerificationId = (verifyUrl: string): string | null => {
+    const patterns = [
+      /\/verify\/([a-f0-9]{24})/i,
+      /[?&]verificationId=([a-f0-9]{24})/i,
+    ];
+    for (const pattern of patterns) {
+      const match = verifyUrl.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
+  // 获取 UDID 作为指纹
+  const fetchUdid = async (): Promise<string> => {
     try {
       const resp = await fetch('https://fn.us.fd.sheerid.com/udid/udid.json');
       const data = await resp.json();
       return String(data.udid || '');
     } catch {
-      return '';
+      // 降级：生成随机指纹
+      return Math.random().toString(36).substring(2, 15);
     }
   };
 
+  // 从 token 输入中提取 emailToken
+  const extractEmailToken = (input: string): string => {
+    // 如果是纯数字，直接返回
+    if (/^\d+$/.test(input.trim())) {
+      return input.trim();
+    }
+    // 尝试从 URL 提取
+    const patterns = [
+      /[?&]emailToken=(\d+)/i,
+      /[?&]token=(\d+)/i,
+      /\/token\/(\d+)/i,
+    ];
+    for (const pattern of patterns) {
+      const match = input.match(pattern);
+      if (match) return match[1];
+    }
+    return input.trim();
+  };
+
+  // 第一步：获取退伍军人数据，提交验证
   const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
 
     try {
-      // 从用户浏览器获取 UDID
-      const clientUdid = await fetchClientUdid();
-      const res = await verifyApi.step1(code, url, email, clientUdid);
-      if (res.data.success && res.data.step === 'emailLoop') {
-        setVerificationId(res.data.verification_id || '');
+      // 1. 从后端获取退伍军人数据
+      const veteranRes = await verifyApi.getVeteran(code);
+      if (!veteranRes.data.success) {
+        throw new Error(veteranRes.data.error || '获取验证数据失败');
+      }
+      const veteran = veteranRes.data.veteran as VeteranData;
+      setVeteranData(veteran);
+
+      // 2. 提取 verificationId
+      const verId = extractVerificationId(url);
+      if (!verId) {
+        throw new Error('无法从 URL 提取 verificationId');
+      }
+      setVerificationId(verId);
+
+      // 3. 获取指纹（从用户浏览器）
+      const udid = await fetchUdid();
+      setFingerprint(udid);
+
+      const headers = {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'clientname': 'jslib',
+      };
+
+      // 4. Step 1: 提交军人状态
+      const statusUrl = `${SHEERID_BASE_URL}/rest/v2/verification/${verId}/step/collectMilitaryStatus`;
+      const statusRes = await fetch(statusUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ status: 'VETERAN' }),
+      });
+      if (!statusRes.ok) {
+        const err = await statusRes.text();
+        throw new Error(`状态提交失败: ${err}`);
+      }
+
+      // 5. Step 2: 提交个人信息
+      const infoUrl = `${SHEERID_BASE_URL}/rest/v2/verification/${verId}/step/collectInactiveMilitaryPersonalInfo`;
+      const payload = {
+        firstName: veteran.first_name,
+        lastName: veteran.last_name,
+        birthDate: veteran.birth_date,
+        dischargeDate: veteran.discharge_date,
+        email: email,
+        phoneNumber: '',
+        country: 'US',
+        locale: 'en-US',
+        organization: { id: veteran.org_id, name: veteran.org_name },
+        deviceFingerprintHash: udid,
+        metadata: { marketConsentValue: false, refererUrl: url },
+      };
+
+      const infoRes = await fetch(infoUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const infoData = await infoRes.json();
+      console.log('Personal info response:', infoData);
+
+      const currentStep = infoData.currentStep || 'unknown';
+
+      if (currentStep === 'emailLoop') {
         setStep(2);
         setResult({
           success: true,
-          message: res.data.message || '请检查邮箱，复制 6 位验证码'
+          message: '验证邮件已发送，请查收邮箱并复制验证码',
         });
-      } else if (res.data.success && res.data.step === 'success') {
+      } else if (currentStep === 'success') {
+        // 直接成功，记录结果
+        await verifyApi.recordResult(veteran.veteran_id, veteran.code_id, true, email);
         setResult({ success: true, message: '验证成功！' });
         resetForm();
+      } else if (currentStep === 'error') {
+        const errorMsg = infoData.systemErrorMessage || infoData.errorIds?.join(', ') || '验证失败';
+        throw new Error(errorMsg);
       } else {
-        setResult({ success: false, message: res.data.error || '验证失败' });
+        setResult({ success: true, message: `状态: ${currentStep}` });
       }
     } catch (err: any) {
+      console.error('Step 1 error:', err);
       setResult({
         success: false,
-        message: err.response?.data?.detail || err.message || '验证失败',
+        message: err.message || '验证失败',
       });
     } finally {
       setLoading(false);
     }
   };
 
+  // 第二步：使用邮件 token 完成验证
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
 
     try {
-      const res = await verifyApi.step2(verificationId, token);
-      if (res.data.success) {
-        setResult({ success: true, message: res.data.message || '验证成功！' });
+      const emailToken = extractEmailToken(token);
+      if (!emailToken) {
+        throw new Error('请输入验证码');
+      }
+
+      const headers = {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'clientname': 'jslib',
+      };
+
+      // 调用 emailLoop API
+      const emailLoopUrl = `${SHEERID_BASE_URL}/rest/v2/verification/${verificationId}/step/emailLoop`;
+      const payload = {
+        emailToken: emailToken,
+        deviceFingerprintHash: fingerprint,
+      };
+
+      const res = await fetch(emailLoopUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      console.log('Email loop response:', data);
+
+      const currentStep = data.currentStep || 'unknown';
+
+      if (currentStep === 'success') {
+        // 记录验证成功
+        if (veteranData) {
+          await verifyApi.recordResult(veteranData.veteran_id, veteranData.code_id, true, email);
+        }
+        setResult({ success: true, message: '验证成功！' });
         resetForm();
+      } else if (currentStep === 'error') {
+        const errorMsg = data.systemErrorMessage || data.errorIds?.join(', ') || '验证失败';
+        throw new Error(errorMsg);
       } else {
-        setResult({ success: false, message: res.data.error || '验证失败' });
+        setResult({ success: true, message: `状态: ${currentStep}` });
       }
     } catch (err: any) {
+      console.error('Step 2 error:', err);
       setResult({
         success: false,
-        message: err.response?.data?.detail || err.message || '验证失败',
+        message: err.message || '验证失败',
       });
     } finally {
       setLoading(false);
@@ -148,6 +300,8 @@ export default function Verify() {
     setEmail('');
     setToken('');
     setVerificationId('');
+    setVeteranData(null);
+    setFingerprint('');
     if (userCodes.length > 0) {
       const usedCode = code.toUpperCase();
       const updatedCodes = userCodes.map(c =>

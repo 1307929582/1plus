@@ -82,37 +82,25 @@ export const codesApi = {
 export const verifyApi = {
   verify: (code: string, url: string, email: string, udid?: string) =>
     api.post('/verify', { code, url, email, udid }),
-  // 两步验证
-  step1: (code: string, url: string, email: string, udid?: string) =>
-    api.post<{
-      success: boolean;
-      step?: string;
-      verification_id?: string;
-      message?: string;
-      error?: string;
-    }>('/verify/step1', { code, url, email, udid }),
-  step2: (verification_id: string, token: string) =>
-    api.post<{
-      success: boolean;
-      message?: string;
-      error?: string;
-    }>('/verify/step2', { verification_id, token }),
-  // 旧接口（保留兼容）
+  // 获取退伍军人数据（前端直接调用 SheerID 时使用）
   getVeteran: (code: string) =>
     api.post<{
-      veteran: {
-        id: number;
+      success: boolean;
+      veteran?: {
         first_name: string;
         last_name: string;
         birth_date: string;
         discharge_date: string;
         org_id: number;
         org_name: string;
+        veteran_id: number;
+        code_id: number;
       };
-      code_id: number;
+      error?: string;
     }>('/verify/get-veteran', { code }),
-  recordResult: (code_id: number, veteran_id: number, email: string, url: string, success: boolean, message: string) =>
-    api.post('/verify/record-result', { code_id, veteran_id, email, url, success, message }),
+  // 记录验证结果
+  recordResult: (veteran_id: number, code_id: number, success: boolean, email: string) =>
+    api.post('/verify/record-result', { veteran_id, code_id, success, email }),
 };
 
 export const logsApi = {

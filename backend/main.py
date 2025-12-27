@@ -549,6 +549,89 @@ def verify_step2(data: VerifyStep2Request, db: Session = Depends(get_db)):
         return {"success": False, "error": result.get("error", "验证失败")}
 
 
+# ==================== Frontend-Direct Verification ====================
+
+class GetVeteranRequest(BaseModel):
+    code: str
+
+
+class RecordResultRequest(BaseModel):
+    veteran_id: int
+    code_id: int
+    success: bool
+    email: str
+
+
+@app.post("/api/verify/get-veteran")
+def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(get_db)):
+    """获取退伍军人数据供前端直接调用 SheerID"""
+    # 验证兑换码
+    code = db.query(RedeemCode).filter(RedeemCode.code == data.code.upper()).first()
+    if not code:
+        return {"success": False, "error": "兑换码不存在"}
+    if not code.is_active:
+        return {"success": False, "error": "兑换码已禁用"}
+    if code.used_count >= code.total_uses:
+        return {"success": False, "error": "兑换码已用完"}
+    if code.expires_at and code.expires_at < datetime.utcnow():
+        return {"success": False, "error": "兑换码已过期"}
+
+    # 获取待验证的退伍军人
+    veteran = db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).first()
+    if not veteran:
+        return {"success": False, "error": "没有待验证的退伍军人"}
+
+    # 标记为处理中
+    veteran.status = VerificationStatus.EMAIL_SENT
+    db.commit()
+
+    return {
+        "success": True,
+        "veteran": {
+            "first_name": veteran.first_name,
+            "last_name": veteran.last_name,
+            "birth_date": veteran.birth_date,
+            "discharge_date": veteran.discharge_date,
+            "org_id": veteran.org_id,
+            "org_name": veteran.org_name,
+            "veteran_id": veteran.id,
+            "code_id": code.id
+        }
+    }
+
+
+@app.post("/api/verify/record-result")
+def record_verification_result(data: RecordResultRequest, db: Session = Depends(get_db)):
+    """记录前端直接验证的结果"""
+    veteran = db.query(Veteran).filter(Veteran.id == data.veteran_id).first()
+    code = db.query(RedeemCode).filter(RedeemCode.id == data.code_id).first()
+
+    if not veteran or not code:
+        return {"success": False, "error": "数据不存在"}
+
+    if data.success:
+        veteran.status = VerificationStatus.SUCCESS
+        veteran.email_used = data.email
+        veteran.verified_at = datetime.utcnow()
+        code.used_count += 1
+
+        usage = CodeUsage(
+            code_id=code.id,
+            veteran_id=veteran.id,
+            email=data.email,
+            verification_url="frontend-direct",
+            status=VerificationStatus.SUCCESS,
+            result_message="验证成功（前端直接调用）"
+        )
+        db.add(usage)
+    else:
+        veteran.status = VerificationStatus.PENDING  # 恢复为待验证
+        veteran.error_message = "验证失败"
+
+    db.commit()
+    return {"success": True}
+
+
 # ==================== Logs ====================
 
 @app.get("/api/logs")
