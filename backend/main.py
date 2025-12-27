@@ -572,15 +572,24 @@ class RecordResultRequest(BaseModel):
 @app.post("/api/verify/get-veteran")
 def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(get_db)):
     """获取退伍军人数据供前端直接调用 SheerID"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"get-veteran called with code: {data.code}")
+
     # 验证兑换码
     code = db.query(RedeemCode).filter(RedeemCode.code == data.code.upper()).first()
     if not code:
+        logger.warning(f"Code not found: {data.code}")
         return {"success": False, "error": "兑换码不存在"}
     if not code.is_active:
+        logger.warning(f"Code inactive: {data.code}")
         return {"success": False, "error": "兑换码已禁用"}
     if code.used_count >= code.total_uses:
+        logger.warning(f"Code exhausted: {data.code}, used={code.used_count}, total={code.total_uses}")
         return {"success": False, "error": "兑换码已用完"}
     if code.expires_at and code.expires_at < datetime.utcnow():
+        logger.warning(f"Code expired: {data.code}")
         return {"success": False, "error": "兑换码已过期"}
 
     # 获取待验证的退伍军人
@@ -589,7 +598,10 @@ def get_veteran_for_verification(data: GetVeteranRequest, db: Session = Depends(
         Veteran.status == VerificationStatus.PENDING
     ).first()
     if not veteran:
+        logger.warning("No pending veterans found")
         return {"success": False, "error": "没有待验证的退伍军人"}
+
+    logger.info(f"Found veteran id={veteran.id}, marking as EMAIL_SENT")
 
     # 标记为处理中
     veteran.status = VerificationStatus.EMAIL_SENT
