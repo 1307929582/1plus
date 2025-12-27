@@ -207,40 +207,43 @@ start_backend() {
         PYTHON_BIN="python3"
     fi
 
-    # 使用 setsid 创建新会话，防止 SSH 断开时被杀掉
-    # 使用 unbuffer 或 stdbuf 确保日志实时输出
-    if command -v setsid &> /dev/null; then
-        setsid "$PYTHON_BIN" -u -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT >> "$LOG_DIR/backend.log" 2>&1 &
-    else
-        nohup "$PYTHON_BIN" -u -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT >> "$LOG_DIR/backend.log" 2>&1 &
-    fi
-    echo $! > "$PID_DIR/backend.pid"
-    disown 2>/dev/null
+    # 清空旧日志，方便查看新的启动信息
+    echo "=== Backend starting at $(date) ===" > "$LOG_DIR/backend.log"
 
-    sleep 2
-    if is_running "backend"; then
-        echo -e "${GREEN}✓ 后端服务已启动 (PID: $(get_pid backend))${NC}"
+    # 使用 nohup + 完全后台运行
+    nohup "$PYTHON_BIN" -u -m uvicorn main:app \
+        --host 0.0.0.0 \
+        --port $BACKEND_PORT \
+        --workers 1 \
+        >> "$LOG_DIR/backend.log" 2>&1 &
+
+    local pid=$!
+    echo $pid > "$PID_DIR/backend.pid"
+
+    # 等待并检查是否真正启动
+    sleep 3
+
+    if ps -p $pid > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ 后端服务已启动 (PID: $pid)${NC}"
+        # 显示最后几行日志
+        echo -e "${CYAN}启动日志:${NC}"
+        tail -5 "$LOG_DIR/backend.log"
     else
-        echo -e "${RED}✗ 后端启动失败，请查看日志: $LOG_DIR/backend.log${NC}"
+        echo -e "${RED}✗ 后端启动失败！${NC}"
+        echo -e "${RED}错误日志:${NC}"
+        cat "$LOG_DIR/backend.log"
         return 1
     fi
 }
 
 start_frontend() {
-    # 生产环境建议使用 nginx
+    # 生产环境：检查是否有反向代理（1Panel/nginx/OpenResty）
     if [ "$IS_PRODUCTION" = true ]; then
-        echo -e "${YELLOW}生产环境建议使用 nginx 服务前端静态文件${NC}"
-        echo -e "${YELLOW}配置文件: nginx/sheerid.conf${NC}"
-        echo -e "${YELLOW}如果已配置 nginx，前端会自动通过 nginx 服务${NC}"
-        echo ""
-
-        # 检查 nginx 是否在运行
-        if command -v nginx &> /dev/null && pgrep nginx > /dev/null; then
-            echo -e "${GREEN}✓ nginx 正在运行，前端由 nginx 服务${NC}"
+        if pgrep -x "nginx" > /dev/null || pgrep -x "openresty" > /dev/null; then
+            echo -e "${GREEN}✓ 检测到 nginx/OpenResty，前端由反向代理服务${NC}"
+            echo -e "${YELLOW}请在 1Panel 中配置静态网站指向: $FRONTEND_DIR/dist${NC}"
             return 0
         fi
-
-        echo -e "${YELLOW}nginx 未运行，使用 vite preview 作为备选...${NC}"
     fi
 
     echo -e "${BLUE}启动前端服务...${NC}"
@@ -260,20 +263,23 @@ start_frontend() {
         npm run build
     fi
 
-    # 使用 setsid 创建新会话，防止 SSH 断开时被杀掉
-    if command -v setsid &> /dev/null; then
-        setsid npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
-    else
-        nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
-    fi
-    echo $! > "$PID_DIR/frontend.pid"
-    disown 2>/dev/null
+    # 清空旧日志
+    echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
+
+    # 使用 nohup 后台运行
+    nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
+
+    local pid=$!
+    echo $pid > "$PID_DIR/frontend.pid"
 
     sleep 3
-    if is_running "frontend"; then
-        echo -e "${GREEN}✓ 前端服务已启动 (PID: $(get_pid frontend))${NC}"
+
+    if ps -p $pid > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ 前端服务已启动 (PID: $pid)${NC}"
+        tail -5 "$LOG_DIR/frontend.log"
     else
-        echo -e "${RED}✗ 前端启动失败，请查看日志: $LOG_DIR/frontend.log${NC}"
+        echo -e "${RED}✗ 前端启动失败！${NC}"
+        cat "$LOG_DIR/frontend.log"
         return 1
     fi
 }
