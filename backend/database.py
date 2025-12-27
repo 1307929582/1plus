@@ -17,12 +17,14 @@ def init_db():
 
 
 def _run_migrations():
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         result = conn.execute(text("PRAGMA table_info(redeem_codes)"))
         columns = [row[1] for row in result.fetchall()]
         if "linuxdo_user_id" not in columns:
-            conn.execute(text("ALTER TABLE redeem_codes ADD COLUMN linuxdo_user_id INTEGER REFERENCES linuxdo_users(id)"))
-            conn.commit()
+            try:
+                conn.execute(text("ALTER TABLE redeem_codes ADD COLUMN linuxdo_user_id INTEGER"))
+            except Exception:
+                pass
 
 
 def get_db():
