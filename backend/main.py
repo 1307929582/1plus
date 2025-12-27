@@ -476,8 +476,17 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
         db.commit()
         db.refresh(user)
         is_new_user = True
+    else:
+        user.username = username
+        user.name = name
+        user.avatar_url = avatar_url
+        user.trust_level = trust_level
+        user.last_login = datetime.utcnow()
+        db.commit()
 
-        # 为新用户生成兑换码
+    # 检查用户是否有兑换码，没有则生成
+    user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
+    if not user_codes:
         codes_count = settings.codes_per_user or 2
         for _ in range(codes_count):
             code_str = secrets.token_urlsafe(8).upper()[:12]
@@ -488,16 +497,7 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
             )
             db.add(new_code)
         db.commit()
-    else:
-        user.username = username
-        user.name = name
-        user.avatar_url = avatar_url
-        user.trust_level = trust_level
-        user.last_login = datetime.utcnow()
-        db.commit()
-
-    # 获取用户的兑换码
-    user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
+        user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
 
     return {
         "user": {
