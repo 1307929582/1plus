@@ -78,5 +78,5 @@ echo -e "  ${CYAN}前端地址:${NC}    http://$(hostname -I 2>/dev/null | awk '
 echo -e "  ${CYAN}管理后台:${NC}    http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):14000/admin"
 echo -e "  ${CYAN}API地址:${NC}     http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):14100"
 echo ""
-echo -e "  ${YELLOW}默认账号:${NC}    admin / admin123"
+echo -e "  ${YELLOW}管理员设置:${NC}  首次访问 /admin 时自行设置账号密码"
 echo ""

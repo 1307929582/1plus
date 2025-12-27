@@ -105,13 +105,10 @@ if [ ! -f ".env" ]; then
     log_info "Creating .env file..."
     cat > .env << 'EOF'
 # SheerID Veteran Verification Tool Configuration
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
 API_HOST=0.0.0.0
 API_PORT=14100
 FRONTEND_PORT=14000
 EOF
-    log_warn "Default .env created. Please update ADMIN_PASSWORD for production!"
 fi
 
 # Summary
@@ -125,7 +122,7 @@ echo -e "  ${CYAN}Stop services:${NC}   ./manage.sh stop"
 echo -e "  ${CYAN}View status:${NC}     ./manage.sh status"
 echo -e "  ${CYAN}View logs:${NC}       ./manage.sh logs"
 echo ""
-echo -e "  ${YELLOW}Default admin:${NC}   admin / admin123"
+echo -e "  ${YELLOW}Admin setup:${NC}     首次访问 /admin 时设置管理员账号"
 echo -e "  ${YELLOW}Backend URL:${NC}     http://localhost:14100"
 echo -e "  ${YELLOW}Frontend URL:${NC}    http://localhost:14000"
 echo ""
