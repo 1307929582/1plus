@@ -237,20 +237,21 @@ restart() {
 }
 
 logs_backend() {
-    echo -e "${BLUE}后端日志 (Ctrl+C 退出):${NC}"
+    echo -e "${BLUE}后端日志 (按 q 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/backend.log" ]; then
-        tail -n 50 -f "$LOG_DIR/backend.log"
+        # 使用 less 代替 tail -f，避免 Ctrl+C 退出整个脚本
+        less +F "$LOG_DIR/backend.log" 2>/dev/null || tail -n 100 "$LOG_DIR/backend.log"
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
 }
 
 logs_frontend() {
-    echo -e "${BLUE}前端日志 (Ctrl+C 退出):${NC}"
+    echo -e "${BLUE}前端日志 (按 q 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/frontend.log" ]; then
-        tail -n 50 -f "$LOG_DIR/frontend.log"
+        less +F "$LOG_DIR/frontend.log" 2>/dev/null || tail -n 100 "$LOG_DIR/frontend.log"
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
@@ -474,6 +475,9 @@ esac
 clear
 show_logo
 
+# 捕获 Ctrl+C，防止意外退出
+trap '' INT
+
 while true; do
     show_menu
     read -p "请输入选项 [0-11]: " choice
@@ -492,6 +496,7 @@ while true; do
         10) redeploy ;;
         11) update ;;
         0)
+            trap - INT  # 恢复默认行为
             echo -e "${GREEN}再见！${NC}"
             exit 0
             ;;
