@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from database import get_db, init_db, engine
 from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings
 from sheerid_service import verify_veteran
+from proxy_config import get_proxy_status
 
 app = FastAPI(title="SheerID Veteran Verification API", version="1.0.0")
 
@@ -560,6 +561,12 @@ def list_linuxdo_users(
 
 
 # ==================== Startup ====================
+
+@app.get("/api/proxy/status")
+def proxy_status():
+    """获取代理配置状态"""
+    return get_proxy_status()
+
 
 @app.on_event("startup")
 def startup():

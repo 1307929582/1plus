@@ -5,8 +5,10 @@ import hashlib
 import random
 import time
 import uuid
-import requests
 from typing import Optional
+import requests
+
+from proxy_config import build_session
 
 SHEERID_BASE_URL = "https://services.sheerid.com"
 
@@ -69,7 +71,7 @@ def verify_veteran(
     if not verification_id:
         return {"success": False, "error": "无法从 URL 提取 verificationId"}
 
-    session = requests.Session()
+    session = build_session()
     headers = get_headers(url)
 
     try:

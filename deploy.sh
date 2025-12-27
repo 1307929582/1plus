@@ -108,6 +108,12 @@ if [ ! -f ".env" ]; then
 API_HOST=0.0.0.0
 API_PORT=14100
 FRONTEND_PORT=14000
+
+# Proxy Configuration (optional)
+# Set PROXY_URL to route SheerID requests through a proxy
+# Example: PROXY_URL=http://127.0.0.1:33300
+# Leave empty or set to "direct" to disable proxy
+PROXY_URL=
 EOF
 fi
 

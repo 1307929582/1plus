@@ -1,0 +1,5 @@
+task_id,title,description,acceptance_criteria,priority,status,blocked_by,owner,diff_path,tests_required,review_notes,commit_sha
+T-001,Add proxy_config module,后端新增 proxy_config.py 支持代理配置,支持 PROXY_URL 环境变量配置代理,high,done,,Claude,backend/proxy_config.py,none,Proxy pattern from Go reference,
+T-002,Update sheerid_service to use proxy,修改 sheerid_service.py 使用代理 session,SheerID 请求通过代理发送,high,done,T-001,Claude,backend/sheerid_service.py,none,,
+T-003,Add proxy status API endpoint,后端新增 /api/proxy/status 接口,接口返回代理配置状态,medium,done,T-001,Claude,backend/main.py,none,,
+T-004,Update deploy.sh with proxy config,更新部署脚本添加代理配置说明,.env 包含 PROXY_URL 配置项,low,done,,Claude,deploy.sh,none,,
