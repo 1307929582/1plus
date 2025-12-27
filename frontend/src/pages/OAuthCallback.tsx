@@ -41,7 +41,7 @@ export default function OAuthCallback() {
 
   const handleCallback = async (code: string) => {
     try {
-      const redirect_uri = `${window.location.origin}/oauth/callback`;
+      const redirect_uri = `${window.location.origin}/auth/callback`;
       const res = await oauthApi.callback(code, redirect_uri);
       setUser(res.data.user);
       setCodes(res.data.codes);

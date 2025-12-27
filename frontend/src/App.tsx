@@ -32,7 +32,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Verify />} />
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
+        <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/admin" element={
           isAuth ? <Layout onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
         }>

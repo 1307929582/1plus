@@ -50,7 +50,7 @@ export default function Verify() {
   const handleLinuxDOLogin = async () => {
     setOauthLoading(true);
     try {
-      const redirect_uri = `${window.location.origin}/oauth/callback`;
+      const redirect_uri = `${window.location.origin}/auth/callback`;
       const res = await oauthApi.getLoginUrl(redirect_uri);
       window.location.href = res.data.auth_url;
     } catch (err: any) {

@@ -145,7 +145,7 @@ export default function Settings() {
           <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10">
             <h3 className="text-sm font-medium text-gray-300 mb-2">回调地址 (Redirect URI)</h3>
             <code className="text-sm text-fuchsia-400 bg-fuchsia-500/10 px-3 py-1.5 rounded-lg border border-fuchsia-500/20 block">
-              {window.location.origin}/oauth/callback
+              {window.location.origin}/auth/callback
             </code>
             <p className="text-xs text-gray-500 mt-2">
               请在 LinuxDO Connect 中配置此回调地址
