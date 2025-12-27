@@ -36,6 +36,10 @@ def build_proxy_url(settings: dict) -> str:
         return ""
 
     proxy_type = settings.get("proxy_type", "socks5")
+    # socks5h = 让代理服务器解析 DNS，解决 HTTPS 连接问题
+    if proxy_type == "socks5":
+        proxy_type = "socks5h"
+
     username = settings.get("username")
     password = settings.get("password")
 
