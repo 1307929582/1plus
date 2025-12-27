@@ -11,6 +11,7 @@ export default function Settings() {
     client_secret: '',
     is_enabled: false,
     codes_per_user: 2,
+    min_trust_level: 0,
   });
 
   useEffect(() => {
@@ -110,6 +111,24 @@ export default function Settings() {
               onChange={(e) => setSettings({ ...settings, codes_per_user: parseInt(e.target.value) || 2 })}
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-300">
+              最低信任等级限制
+            </label>
+            <select
+              value={settings.min_trust_level}
+              onChange={(e) => setSettings({ ...settings, min_trust_level: parseInt(e.target.value) })}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
+            >
+              <option value={0} className="bg-[#12121a]">Lv.0 - 无限制</option>
+              <option value={1} className="bg-[#12121a]">Lv.1 - 基础用户</option>
+              <option value={2} className="bg-[#12121a]">Lv.2 - 成员</option>
+              <option value={3} className="bg-[#12121a]">Lv.3 - 活跃成员</option>
+              <option value={4} className="bg-[#12121a]">Lv.4 - 领袖</option>
+            </select>
+            <p className="text-xs text-gray-500">低于此等级的用户将无法登录</p>
           </div>
 
           <div className="flex items-center gap-3">

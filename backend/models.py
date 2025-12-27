@@ -124,6 +124,7 @@ class OAuthSettings(Base):
     client_id = Column(String(200), nullable=True)
     client_secret = Column(String(200), nullable=True)
     is_enabled = Column(Boolean, default=False)
-    codes_per_user = Column(Integer, default=2)  # 每用户发放兑换码数量
+    codes_per_user = Column(Integer, default=2)
+    min_trust_level = Column(Integer, default=0)  # 最低信任等级限制
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

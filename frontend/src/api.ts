@@ -91,7 +91,7 @@ export const logsApi = {
 
 export const oauthApi = {
   getSettings: () => api.get('/admin/oauth/settings'),
-  updateSettings: (data: { client_id?: string; client_secret?: string; is_enabled?: boolean; codes_per_user?: number }) =>
+  updateSettings: (data: { client_id?: string; client_secret?: string; is_enabled?: boolean; codes_per_user?: number; min_trust_level?: number }) =>
     api.put('/admin/oauth/settings', data),
   getStatus: () => api.get<{ enabled: boolean }>('/oauth/linuxdo/status'),
   getLoginUrl: (redirect_uri: string) =>

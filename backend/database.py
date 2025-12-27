@@ -26,6 +26,14 @@ def _run_migrations():
             except Exception:
                 pass
 
+        result = conn.execute(text("PRAGMA table_info(oauth_settings)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "min_trust_level" not in columns:
+            try:
+                conn.execute(text("ALTER TABLE oauth_settings ADD COLUMN min_trust_level INTEGER DEFAULT 0"))
+            except Exception:
+                pass
+
 
 def get_db():
     db = SessionLocal()

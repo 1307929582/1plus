@@ -72,6 +72,7 @@ class OAuthSettingsUpdate(BaseModel):
     client_secret: Optional[str] = None
     is_enabled: Optional[bool] = None
     codes_per_user: Optional[int] = None
+    min_trust_level: Optional[int] = None
 
 
 # ==================== Auth ====================
@@ -362,7 +363,8 @@ def get_oauth_settings(admin: Admin = Depends(verify_admin), db: Session = Depen
         "client_id": settings.client_id or "",
         "client_secret": "***" if settings.client_secret else "",
         "is_enabled": settings.is_enabled,
-        "codes_per_user": settings.codes_per_user
+        "codes_per_user": settings.codes_per_user,
+        "min_trust_level": settings.min_trust_level or 0
     }
 
 
@@ -382,6 +384,8 @@ def update_oauth_settings(data: OAuthSettingsUpdate, admin: Admin = Depends(veri
         settings.is_enabled = data.is_enabled
     if data.codes_per_user is not None:
         settings.codes_per_user = data.codes_per_user
+    if data.min_trust_level is not None:
+        settings.min_trust_level = data.min_trust_level
 
     db.commit()
     return {"message": "设置已更新"}
@@ -460,6 +464,11 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
     avatar_url = user_data.get("avatar_url")
     trust_level = user_data.get("trust_level", 0)
 
+    # 检查信任等级
+    min_level = settings.min_trust_level or 0
+    if trust_level < min_level:
+        raise HTTPException(status_code=403, detail=f"信任等级不足，需要 Lv.{min_level} 以上")
+
     # 查找或创建用户
     user = db.query(LinuxDOUser).filter(LinuxDOUser.linuxdo_id == linuxdo_id).first()
     is_new_user = False
@@ -531,7 +540,23 @@ def list_linuxdo_users(
     """列出所有 LinuxDO 用户"""
     users = db.query(LinuxDOUser).order_by(LinuxDOUser.id.desc()).offset(skip).limit(limit).all()
     total = db.query(LinuxDOUser).count()
-    return {"users": users, "total": total}
+
+    result = []
+    for user in users:
+        codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
+        result.append({
+            "id": user.id,
+            "linuxdo_id": user.linuxdo_id,
+            "username": user.username,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "trust_level": user.trust_level,
+            "created_at": user.created_at,
+            "last_login": user.last_login,
+            "codes": [{"code": c.code, "used_count": c.used_count, "total_uses": c.total_uses, "is_active": c.is_active} for c in codes]
+        })
+
+    return {"users": result, "total": total}
 
 
 # ==================== Startup ====================

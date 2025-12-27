@@ -6,6 +6,7 @@ import Veterans from './pages/Veterans';
 import Codes from './pages/Codes';
 import Verify from './pages/Verify';
 import Settings from './pages/Settings';
+import LinuxDOUsers from './pages/LinuxDOUsers';
 import OAuthCallback from './pages/OAuthCallback';
 import Layout from './components/Layout';
 
@@ -39,6 +40,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="veterans" element={<Veterans />} />
           <Route path="codes" element={<Codes />} />
+          <Route path="users" element={<LinuxDOUsers />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
