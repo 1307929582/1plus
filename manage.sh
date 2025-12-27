@@ -200,8 +200,15 @@ start_backend() {
         PYTHON_BIN="python3"
     fi
 
-    nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT > "$LOG_DIR/backend.log" 2>&1 &
+    # 使用 setsid 创建新会话，防止 SSH 断开时被杀掉
+    # 使用 unbuffer 或 stdbuf 确保日志实时输出
+    if command -v setsid &> /dev/null; then
+        setsid "$PYTHON_BIN" -u -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT >> "$LOG_DIR/backend.log" 2>&1 &
+    else
+        nohup "$PYTHON_BIN" -u -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT >> "$LOG_DIR/backend.log" 2>&1 &
+    fi
     echo $! > "$PID_DIR/backend.pid"
+    disown 2>/dev/null
 
     sleep 2
     if is_running "backend"; then
@@ -230,9 +237,14 @@ start_frontend() {
         npm run build
     fi
 
-    # 生产模式：使用 preview 服务静态文件
-    nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
+    # 使用 setsid 创建新会话，防止 SSH 断开时被杀掉
+    if command -v setsid &> /dev/null; then
+        setsid npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
+    else
+        nohup npm run preview -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
+    fi
     echo $! > "$PID_DIR/frontend.pid"
+    disown 2>/dev/null
 
     sleep 3
     if is_running "frontend"; then
