@@ -484,9 +484,14 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
         user.last_login = datetime.utcnow()
         db.commit()
 
-    # 检查用户是否有兑换码，没有则生成
-    user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
-    if not user_codes:
+    # 检查用户是否有可用兑换码，没有则生成
+    usable_codes = db.query(RedeemCode).filter(
+        RedeemCode.linuxdo_user_id == user.id,
+        RedeemCode.is_active == True,
+        RedeemCode.used_count < RedeemCode.total_uses
+    ).first()
+
+    if not usable_codes:
         codes_count = settings.codes_per_user or 2
         for _ in range(codes_count):
             code_str = secrets.token_urlsafe(8).upper()[:12]
@@ -496,8 +501,12 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
                 linuxdo_user_id=user.id
             )
             db.add(new_code)
-        db.commit()
-        user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
 
     return {
         "user": {
