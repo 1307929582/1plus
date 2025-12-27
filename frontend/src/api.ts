@@ -1,14 +1,21 @@
 import axios from 'axios';
 
-// 生产环境下使用同源的 /api，开发环境下 Vite 会代理
-// 如果通过非 localhost 访问，需要确保后端也在同一主机上
+// 动态获取 API 基础 URL
+// 如果通过 1Panel/nginx 反向代理，使用相对路径 /api
+// 否则使用同协议同主机的 14100 端口
 const getBaseURL = () => {
-  // 如果是通过 IP 或域名访问，使用同主机的 14100 端口
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `http://${window.location.hostname}:14100/api`;
+  if (typeof window === 'undefined') return '/api';
+
+  // 如果是标准端口（80/443），说明有反向代理，使用相对路径
+  const port = window.location.port;
+  if (!port || port === '80' || port === '443') {
+    return '/api';
   }
-  // localhost 访问时，使用相对路径（开发模式有代理，生产模式需要同端口）
-  return `http://${window.location.hostname}:14100/api`;
+
+  // 否则直接请求后端端口，保持相同协议
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  return `${protocol}//${hostname}:14100/api`;
 };
 
 const api = axios.create({
