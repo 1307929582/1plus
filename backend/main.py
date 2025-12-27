@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from database import get_db, init_db, engine
 from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings, ProxySettings
-from sheerid_service import verify_veteran
+from sheerid_service import verify_veteran, verify_veteran_step1, complete_email_loop, extract_token_from_url
 from proxy_config import get_proxy_status
 
 app = FastAPI(title="SheerID Veteran Verification API", version="1.0.0")
@@ -56,6 +56,7 @@ class VerifyRequest(BaseModel):
     code: str
     url: str
     email: str
+    udid: Optional[str] = None
 
 
 class DashboardStats(BaseModel):
@@ -309,7 +310,8 @@ def verify_with_code(data: VerifyRequest, db: Session = Depends(get_db)):
         discharge_date=veteran.discharge_date,
         org_id=veteran.org_id,
         org_name=veteran.org_name,
-        email=data.email
+        email=data.email,
+        client_udid=data.udid
     )
 
     # 更新状态
@@ -343,6 +345,206 @@ def verify_with_code(data: VerifyRequest, db: Session = Depends(get_db)):
         "veteran_name": f"{veteran.first_name} {veteran.last_name}",
         "remaining_uses": code.total_uses - code.used_count
     }
+
+
+class GetVeteranRequest(BaseModel):
+    code: str
+
+
+class RecordResultRequest(BaseModel):
+    code_id: int
+    veteran_id: int
+    email: str
+    url: str
+    success: bool
+    message: str
+
+
+@app.post("/api/verify/get-veteran")
+def get_veteran_for_verify(data: GetVeteranRequest, db: Session = Depends(get_db)):
+    """获取退伍军人数据供前端直接调用 SheerID"""
+    code = db.query(RedeemCode).filter(RedeemCode.code == data.code).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="兑换码不存在")
+    if not code.is_active:
+        raise HTTPException(status_code=400, detail="兑换码已禁用")
+    if code.used_count >= code.total_uses:
+        raise HTTPException(status_code=400, detail="兑换码已用完")
+    if code.expires_at and code.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="兑换码已过期")
+
+    veteran = db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).first()
+    if not veteran:
+        raise HTTPException(status_code=404, detail="没有待验证的退伍军人")
+
+    return {
+        "veteran": {
+            "id": veteran.id,
+            "first_name": veteran.first_name,
+            "last_name": veteran.last_name,
+            "birth_date": veteran.birth_date,
+            "discharge_date": veteran.discharge_date,
+            "org_id": veteran.org_id,
+            "org_name": veteran.org_name,
+        },
+        "code_id": code.id
+    }
+
+
+@app.post("/api/verify/record-result")
+def record_verify_result(data: RecordResultRequest, db: Session = Depends(get_db)):
+    """记录前端直接调用 SheerID 的验证结果"""
+    code = db.query(RedeemCode).filter(RedeemCode.id == data.code_id).first()
+    veteran = db.query(Veteran).filter(Veteran.id == data.veteran_id).first()
+
+    if not code or not veteran:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    if data.success:
+        veteran.status = VerificationStatus.EMAIL_SENT
+        veteran.email_used = data.email
+        veteran.verified_at = datetime.utcnow()
+    else:
+        veteran.status = VerificationStatus.FAILED
+        veteran.error_message = data.message
+
+    usage = CodeUsage(
+        code_id=code.id,
+        veteran_id=veteran.id,
+        email=data.email,
+        verification_url=data.url,
+        status=veteran.status,
+        result_message=data.message
+    )
+    db.add(usage)
+    code.used_count += 1
+    db.commit()
+
+    return {"success": True, "remaining_uses": code.total_uses - code.used_count}
+
+
+# ==================== Two-Step Verification ====================
+
+# 存储进行中的验证（verification_id -> {fingerprint, veteran_id, code_id}）
+pending_verifications = {}
+
+
+class VerifyStep1Request(BaseModel):
+    code: str
+    url: str
+    email: str
+
+
+class VerifyStep2Request(BaseModel):
+    verification_id: str
+    token: str  # 可以是 token 或包含 token 的 URL
+
+
+@app.post("/api/verify/step1")
+def verify_step1(data: VerifyStep1Request, db: Session = Depends(get_db)):
+    """第一步：提交验证，发送邮件"""
+    # 验证兑换码
+    code = db.query(RedeemCode).filter(RedeemCode.code == data.code).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="兑换码不存在")
+    if not code.is_active:
+        raise HTTPException(status_code=400, detail="兑换码已禁用")
+    if code.used_count >= code.total_uses:
+        raise HTTPException(status_code=400, detail="兑换码已用完")
+    if code.expires_at and code.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="兑换码已过期")
+
+    # 获取退伍军人
+    veteran = db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).first()
+    if not veteran:
+        raise HTTPException(status_code=404, detail="没有待验证的退伍军人")
+
+    # 执行第一步验证
+    result = verify_veteran_step1(
+        url=data.url,
+        first_name=veteran.first_name,
+        last_name=veteran.last_name,
+        birth_date=veteran.birth_date,
+        discharge_date=veteran.discharge_date,
+        org_id=veteran.org_id,
+        org_name=veteran.org_name,
+        email=data.email
+    )
+
+    if result.get("success") and result.get("step") == "emailLoop":
+        # 保存验证状态
+        verification_id = result.get("verification_id")
+        pending_verifications[verification_id] = {
+            "fingerprint": result.get("fingerprint"),
+            "veteran_id": veteran.id,
+            "code_id": code.id,
+            "email": data.email,
+            "url": data.url
+        }
+        return {
+            "success": True,
+            "step": "emailLoop",
+            "verification_id": verification_id,
+            "message": "请检查邮箱，复制邮件中的 6 位数字验证码"
+        }
+    elif result.get("success") and result.get("step") == "success":
+        # 直接成功（无需邮件验证）
+        veteran.status = VerificationStatus.SUCCESS
+        veteran.email_used = data.email
+        veteran.verified_at = datetime.utcnow()
+        code.used_count += 1
+        db.commit()
+        return {"success": True, "step": "success", "message": "验证成功！"}
+    else:
+        return {"success": False, "error": result.get("error", "验证失败")}
+
+
+@app.post("/api/verify/step2")
+def verify_step2(data: VerifyStep2Request, db: Session = Depends(get_db)):
+    """第二步：提交邮件 token 完成验证"""
+    # 获取保存的验证状态
+    pending = pending_verifications.get(data.verification_id)
+    if not pending:
+        raise HTTPException(status_code=404, detail="验证会话不存在或已过期")
+
+    # 提取 token
+    token = extract_token_from_url(data.token) or data.token
+
+    # 完成邮件验证
+    result = complete_email_loop(
+        verification_id=data.verification_id,
+        email_token=token,
+        fingerprint=pending["fingerprint"]
+    )
+
+    if result.get("success") and result.get("step") == "success":
+        # 更新数据库
+        veteran = db.query(Veteran).filter(Veteran.id == pending["veteran_id"]).first()
+        code = db.query(RedeemCode).filter(RedeemCode.id == pending["code_id"]).first()
+
+        if veteran and code:
+            veteran.status = VerificationStatus.SUCCESS
+            veteran.email_used = pending["email"]
+            veteran.verified_at = datetime.utcnow()
+
+            usage = CodeUsage(
+                code_id=code.id,
+                veteran_id=veteran.id,
+                email=pending["email"],
+                verification_url=pending["url"],
+                status=VerificationStatus.SUCCESS,
+                result_message="验证成功"
+            )
+            db.add(usage)
+            code.used_count += 1
+            db.commit()
+
+        # 清理
+        del pending_verifications[data.verification_id]
+
+        return {"success": True, "message": "验证成功！"}
+    else:
+        return {"success": False, "error": result.get("error", "验证失败")}
 
 
 # ==================== Logs ====================

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { verifyApi, oauthApi } from '../api';
-import { CheckCircle, XCircle, Loader, Sparkles, LogIn, Ticket, Copy } from 'lucide-react';
+import { CheckCircle, XCircle, Loader, Sparkles, LogIn, Ticket, Copy, Mail } from 'lucide-react';
 
 interface StoredUser {
   username: string;
@@ -20,23 +20,27 @@ export default function Verify() {
   const [code, setCode] = useState('');
   const [url, setUrl] = useState('');
   const [email, setEmail] = useState('');
+  const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [oauthEnabled, setOauthEnabled] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [user, setUser] = useState<StoredUser | null>(null);
   const [userCodes, setUserCodes] = useState<StoredCode[]>([]);
+
+  // 两步验证状态
+  const [step, setStep] = useState<1 | 2>(1);
+  const [verificationId, setVerificationId] = useState('');
+
   const [result, setResult] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
 
   useEffect(() => {
-    // 检查 OAuth 是否启用
     oauthApi.getStatus().then(res => {
       setOauthEnabled(res.data.enabled);
     }).catch(() => {});
 
-    // 检查是否已登录
     const storedUser = localStorage.getItem('linuxdo_user');
     const storedCodes = localStorage.getItem('linuxdo_codes');
     if (storedUser) {
@@ -72,37 +76,81 @@ export default function Verify() {
     alert('已复制并填入兑换码');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
 
     try {
-      const res = await verifyApi.verify(code, url, email);
-      setResult(res.data);
-      if (res.data.success) {
-        setUrl('');
-        setEmail('');
-        // 更新本地存储的兑换码使用次数
-        if (userCodes.length > 0) {
-          const usedCode = code.toUpperCase();
-          const updatedCodes = userCodes.map(c =>
-            c.code.toUpperCase() === usedCode
-              ? { ...c, used_count: c.total_uses - res.data.remaining_uses }
-              : c
-          );
-          setUserCodes(updatedCodes);
-          localStorage.setItem('linuxdo_codes', JSON.stringify(updatedCodes));
-        }
+      const res = await verifyApi.step1(code, url, email);
+      if (res.data.success && res.data.step === 'emailLoop') {
+        setVerificationId(res.data.verification_id || '');
+        setStep(2);
+        setResult({
+          success: true,
+          message: res.data.message || '请检查邮箱，复制 6 位验证码'
+        });
+      } else if (res.data.success && res.data.step === 'success') {
+        setResult({ success: true, message: '验证成功！' });
+        resetForm();
+      } else {
+        setResult({ success: false, message: res.data.error || '验证失败' });
       }
     } catch (err: any) {
       setResult({
         success: false,
-        message: err.response?.data?.detail || '验证失败',
+        message: err.response?.data?.detail || err.message || '验证失败',
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStep2 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await verifyApi.step2(verificationId, token);
+      if (res.data.success) {
+        setResult({ success: true, message: res.data.message || '验证成功！' });
+        resetForm();
+      } else {
+        setResult({ success: false, message: res.data.error || '验证失败' });
+      }
+    } catch (err: any) {
+      setResult({
+        success: false,
+        message: err.response?.data?.detail || err.message || '验证失败',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setStep(1);
+    setUrl('');
+    setEmail('');
+    setToken('');
+    setVerificationId('');
+    if (userCodes.length > 0) {
+      const usedCode = code.toUpperCase();
+      const updatedCodes = userCodes.map(c =>
+        c.code.toUpperCase() === usedCode
+          ? { ...c, used_count: c.used_count + 1 }
+          : c
+      );
+      setUserCodes(updatedCodes);
+      localStorage.setItem('linuxdo_codes', JSON.stringify(updatedCodes));
+    }
+  };
+
+  const goBackToStep1 = () => {
+    setStep(1);
+    setToken('');
+    setResult(null);
   };
 
   return (
@@ -141,10 +189,16 @@ export default function Verify() {
               <p className="text-gray-400 text-sm">
                 SheerID Veteran Verification
               </p>
+              {/* Step indicator */}
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= 1 ? 'bg-violet-500 text-white' : 'bg-white/10 text-gray-500'}`}>1</div>
+                <div className={`w-12 h-0.5 ${step >= 2 ? 'bg-violet-500' : 'bg-white/10'}`} />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= 2 ? 'bg-violet-500 text-white' : 'bg-white/10 text-gray-500'}`}>2</div>
+              </div>
             </div>
 
             {/* LinuxDO Login / User Info */}
-            {oauthEnabled && (
+            {oauthEnabled && step === 1 && (
               <div className="mb-6">
                 {user ? (
                   <div className="p-4 bg-white/5 rounded-xl border border-white/10">
@@ -201,68 +255,129 @@ export default function Verify() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  兑换码
-                </label>
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
-                  placeholder="请输入兑换码"
-                  required
-                />
-              </div>
+            {/* Step 1 Form */}
+            {step === 1 && (
+              <form onSubmit={handleStep1} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    兑换码
+                  </label>
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
+                    placeholder="请输入兑换码"
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  验证链接
-                </label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
-                  placeholder="https://services.sheerid.com/verify/..."
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    验证链接
+                  </label>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
+                    placeholder="https://services.sheerid.com/verify/..."
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  接收邮箱
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    接收邮箱
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
+                    placeholder="your@email.com"
+                    required
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="relative w-full py-3.5 mt-2 rounded-xl font-semibold text-white overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600 bg-[length:200%_100%] group-hover:animate-shimmer transition-all" />
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-fuchsia-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <span className="relative flex items-center justify-center gap-2">
-                  {loading ? (
-                    <>
-                      <Loader className="w-5 h-5 animate-spin" />
-                      验证中...
-                    </>
-                  ) : (
-                    '开始验证'
-                  )}
-                </span>
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="relative w-full py-3.5 mt-2 rounded-xl font-semibold text-white overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600 bg-[length:200%_100%] group-hover:animate-shimmer transition-all" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-fuchsia-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <span className="relative flex items-center justify-center gap-2">
+                    {loading ? (
+                      <>
+                        <Loader className="w-5 h-5 animate-spin" />
+                        提交中...
+                      </>
+                    ) : (
+                      '第一步：发送验证邮件'
+                    )}
+                  </span>
+                </button>
+              </form>
+            )}
+
+            {/* Step 2 Form */}
+            {step === 2 && (
+              <form onSubmit={handleStep2} className="space-y-5">
+                <div className="p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Mail className="w-5 h-5 text-cyan-400" />
+                    <p className="text-cyan-400 text-sm">
+                      验证邮件已发送，请查收邮箱
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    邮件验证码 / 验证链接
+                  </label>
+                  <input
+                    type="text"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300"
+                    placeholder="输入 6 位数字验证码或粘贴完整链接"
+                    required
+                  />
+                  <p className="text-xs text-gray-500">
+                    从邮件中复制 6 位数字验证码，或直接粘贴邮件中的验证链接
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={goBackToStep1}
+                    className="flex-1 py-3 rounded-xl font-medium text-gray-400 border border-white/10 hover:bg-white/5 transition-colors"
+                  >
+                    返回
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="relative flex-1 py-3 rounded-xl font-semibold text-white overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-cyan-500" />
+                    <span className="relative flex items-center justify-center gap-2">
+                      {loading ? (
+                        <>
+                          <Loader className="w-5 h-5 animate-spin" />
+                          验证中...
+                        </>
+                      ) : (
+                        '完成验证'
+                      )}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Result */}
             {result && (
@@ -285,10 +400,10 @@ export default function Verify() {
                   )}
                   <div>
                     <p className={`font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {result.success ? '验证成功！' : '验证失败'}
+                      {result.success ? (step === 2 ? '验证成功！' : '邮件已发送') : '操作失败'}
                     </p>
                     <p className="text-sm text-gray-400 mt-0.5">
-                      {result.success ? '请检查邮箱完成验证' : result.message}
+                      {result.message}
                     </p>
                   </div>
                 </div>

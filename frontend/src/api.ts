@@ -80,8 +80,39 @@ export const codesApi = {
 };
 
 export const verifyApi = {
-  verify: (code: string, url: string, email: string) =>
-    api.post('/verify', { code, url, email }),
+  verify: (code: string, url: string, email: string, udid?: string) =>
+    api.post('/verify', { code, url, email, udid }),
+  // 两步验证
+  step1: (code: string, url: string, email: string) =>
+    api.post<{
+      success: boolean;
+      step?: string;
+      verification_id?: string;
+      message?: string;
+      error?: string;
+    }>('/verify/step1', { code, url, email }),
+  step2: (verification_id: string, token: string) =>
+    api.post<{
+      success: boolean;
+      message?: string;
+      error?: string;
+    }>('/verify/step2', { verification_id, token }),
+  // 旧接口（保留兼容）
+  getVeteran: (code: string) =>
+    api.post<{
+      veteran: {
+        id: number;
+        first_name: string;
+        last_name: string;
+        birth_date: string;
+        discharge_date: string;
+        org_id: number;
+        org_name: string;
+      };
+      code_id: number;
+    }>('/verify/get-veteran', { code }),
+  recordResult: (code_id: number, veteran_id: number, email: string, url: string, success: boolean, message: string) =>
+    api.post('/verify/record-result', { code_id, veteran_id, email, url, success, message }),
 };
 
 export const logsApi = {
