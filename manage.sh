@@ -149,6 +149,9 @@ start_frontend() {
     echo -e "${BLUE}启动前端服务...${NC}"
     cd "$FRONTEND_DIR"
 
+    # 先杀掉占用端口的进程
+    lsof -ti:14000 | xargs kill -9 2>/dev/null
+
     nohup npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid"
 
