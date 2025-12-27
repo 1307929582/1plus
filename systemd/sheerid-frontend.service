@@ -1,0 +1,16 @@
+[Unit]
+Description=SheerID Veteran Verification Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/sheerid_veteran_tool/frontend
+ExecStart=/usr/bin/npm run preview -- --port 14000 --host 0.0.0.0
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/sheerid_veteran_tool/logs/frontend.log
+StandardError=append:/root/sheerid_veteran_tool/logs/frontend.log
+
+[Install]
+WantedBy=multi-user.target

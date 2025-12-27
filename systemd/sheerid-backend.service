@@ -1,0 +1,16 @@
+[Unit]
+Description=SheerID Veteran Verification Backend
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/sheerid_veteran_tool/backend
+ExecStart=/root/sheerid_veteran_tool/backend/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 14100
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/sheerid_veteran_tool/logs/backend.log
+StandardError=append:/root/sheerid_veteran_tool/logs/backend.log
+
+[Install]
+WantedBy=multi-user.target
