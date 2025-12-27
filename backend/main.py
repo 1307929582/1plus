@@ -420,18 +420,26 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
     if not settings or not settings.client_id or not settings.client_secret:
         raise HTTPException(status_code=400, detail="LinuxDO OAuth 未配置")
 
-    # 获取 access_token
+    # 获取 access_token (使用 HTTP Basic Auth)
+    import base64
+    credentials = base64.b64encode(f"{settings.client_id}:{settings.client_secret}".encode()).decode()
+
     async with httpx.AsyncClient() as client:
-        token_resp = await client.post(LINUXDO_TOKEN_URL, data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": settings.client_id,
-            "client_secret": settings.client_secret
-        })
+        token_resp = await client.post(
+            LINUXDO_TOKEN_URL,
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri
+            }
+        )
 
         if token_resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="获取 token 失败")
+            raise HTTPException(status_code=400, detail=f"获取 token 失败: {token_resp.text}")
 
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
@@ -442,7 +450,7 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
         })
 
         if user_resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="获取用户信息失败")
+            raise HTTPException(status_code=400, detail=f"获取用户信息失败: {user_resp.text}")
 
         user_data = user_resp.json()
 
