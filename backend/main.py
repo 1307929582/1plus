@@ -433,6 +433,7 @@ class VerifyStep1Request(BaseModel):
     code: str
     url: str
     email: str
+    udid: Optional[str] = None
 
 
 class VerifyStep2Request(BaseModel):
@@ -468,7 +469,8 @@ def verify_step1(data: VerifyStep1Request, db: Session = Depends(get_db)):
         discharge_date=veteran.discharge_date,
         org_id=veteran.org_id,
         org_name=veteran.org_name,
-        email=data.email
+        email=data.email,
+        client_udid=data.udid
     )
 
     if result.get("success") and result.get("step") == "emailLoop":

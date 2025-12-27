@@ -163,7 +163,8 @@ def verify_veteran_step1(
     discharge_date: str,
     org_id: int,
     org_name: str,
-    email: str
+    email: str,
+    client_udid: Optional[str] = None
 ) -> dict:
     """第一步：提交验证，返回 fingerprint 供后续使用"""
     verification_id = extract_verification_id(url)
@@ -174,10 +175,14 @@ def verify_veteran_step1(
     headers = get_headers(url)
 
     try:
-        # 获取 UDID
-        udid = get_udid(session)
-        fingerprint = udid if udid else generate_fingerprint()
-        logger.info(f"Step1 using fingerprint: {fingerprint}")
+        # 优先使用客户端 UDID，否则获取服务器 UDID
+        if client_udid:
+            fingerprint = client_udid
+            logger.info(f"Step1 using client UDID: {fingerprint}")
+        else:
+            udid = get_udid(session)
+            fingerprint = udid if udid else generate_fingerprint()
+            logger.info(f"Step1 using server fingerprint: {fingerprint}")
 
         # Step 1: 提交军人状态
         status_url = f"{SHEERID_BASE_URL}/rest/v2/verification/{verification_id}/step/collectMilitaryStatus"

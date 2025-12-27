@@ -76,13 +76,26 @@ export default function Verify() {
     alert('已复制并填入兑换码');
   };
 
+  // 获取用户浏览器的 UDID
+  const fetchClientUdid = async (): Promise<string> => {
+    try {
+      const resp = await fetch('https://fn.us.fd.sheerid.com/udid/udid.json');
+      const data = await resp.json();
+      return String(data.udid || '');
+    } catch {
+      return '';
+    }
+  };
+
   const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
 
     try {
-      const res = await verifyApi.step1(code, url, email);
+      // 从用户浏览器获取 UDID
+      const clientUdid = await fetchClientUdid();
+      const res = await verifyApi.step1(code, url, email, clientUdid);
       if (res.data.success && res.data.step === 'emailLoop') {
         setVerificationId(res.data.verification_id || '');
         setStep(2);

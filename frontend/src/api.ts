@@ -83,14 +83,14 @@ export const verifyApi = {
   verify: (code: string, url: string, email: string, udid?: string) =>
     api.post('/verify', { code, url, email, udid }),
   // 两步验证
-  step1: (code: string, url: string, email: string) =>
+  step1: (code: string, url: string, email: string, udid?: string) =>
     api.post<{
       success: boolean;
       step?: string;
       verification_id?: string;
       message?: string;
       error?: string;
-    }>('/verify/step1', { code, url, email }),
+    }>('/verify/step1', { code, url, email, udid }),
   step2: (verification_id: string, token: string) =>
     api.post<{
       success: boolean;
