@@ -152,7 +152,14 @@ start_frontend() {
     # 先杀掉占用端口的进程
     lsof -ti:14000 | xargs kill -9 2>/dev/null
 
-    nohup npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
+    # 检查是否有构建产物，没有则先构建
+    if [ ! -d "dist" ]; then
+        echo -e "${YELLOW}未找到构建产物，正在构建...${NC}"
+        npm run build
+    fi
+
+    # 生产模式：使用 preview 服务静态文件
+    nohup npm run preview -- --port 14000 --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid"
 
     sleep 3
