@@ -240,8 +240,27 @@ logs_backend() {
     echo -e "${BLUE}后端日志 (按 q 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/backend.log" ]; then
-        # 使用 less 代替 tail -f，避免 Ctrl+C 退出整个脚本
-        less +F "$LOG_DIR/backend.log" 2>/dev/null || tail -n 100 "$LOG_DIR/backend.log"
+        local old_trap interrupted status
+        interrupted=0
+        old_trap=$(trap -p INT)
+        trap 'interrupted=1' INT
+
+        if less +F "$LOG_DIR/backend.log" 2>/dev/null; then
+            status=0
+        else
+            status=$?
+        fi
+
+        if [ "$status" -ne 0 ] && [ "$status" -ne 130 ] && [ "$interrupted" -eq 0 ]; then
+            tail -n 100 "$LOG_DIR/backend.log" || :
+        fi
+
+        if [ -n "$old_trap" ]; then
+            eval "$old_trap"
+        else
+            trap - INT
+        fi
+        return 0
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
@@ -251,7 +270,27 @@ logs_frontend() {
     echo -e "${BLUE}前端日志 (按 q 退出):${NC}"
     echo ""
     if [ -f "$LOG_DIR/frontend.log" ]; then
-        less +F "$LOG_DIR/frontend.log" 2>/dev/null || tail -n 100 "$LOG_DIR/frontend.log"
+        local old_trap interrupted status
+        interrupted=0
+        old_trap=$(trap -p INT)
+        trap 'interrupted=1' INT
+
+        if less +F "$LOG_DIR/frontend.log" 2>/dev/null; then
+            status=0
+        else
+            status=$?
+        fi
+
+        if [ "$status" -ne 0 ] && [ "$status" -ne 130 ] && [ "$interrupted" -eq 0 ]; then
+            tail -n 100 "$LOG_DIR/frontend.log" || :
+        fi
+
+        if [ -n "$old_trap" ]; then
+            eval "$old_trap"
+        else
+            trap - INT
+        fi
+        return 0
     else
         echo -e "${RED}日志文件不存在${NC}"
     fi
