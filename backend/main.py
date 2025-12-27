@@ -493,6 +493,7 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
 
     if not usable_codes:
         codes_count = settings.codes_per_user or 2
+        generated = []
         for _ in range(codes_count):
             code_str = secrets.token_urlsafe(8).upper()[:12]
             new_code = RedeemCode(
@@ -501,10 +502,8 @@ async def linuxdo_callback(code: str, redirect_uri: str, db: Session = Depends(g
                 linuxdo_user_id=user.id
             )
             db.add(new_code)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
+            generated.append(new_code)
+        db.commit()
 
     user_codes = db.query(RedeemCode).filter(RedeemCode.linuxdo_user_id == user.id).all()
 
