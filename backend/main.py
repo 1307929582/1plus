@@ -186,14 +186,25 @@ async def import_veterans(
     reader = csv.DictReader(io.StringIO(decoded))
 
     count = 0
+    skipped = 0
     for row in reader:
+        first_name = row.get("first_name", "").strip()
+        last_name = row.get("last_name", "").strip()
+        birth_date = row.get("birth_date", "").strip()
+        discharge_date = row.get("discharge_date", "").strip()
+
+        # 跳过空行或必填字段为空的行
+        if not first_name or not last_name or not birth_date or not discharge_date:
+            skipped += 1
+            continue
+
         org_id_val = row.get("org_id", "").strip()
         org_name_val = row.get("org_name", "").strip()
         veteran = Veteran(
-            first_name=row["first_name"].strip(),
-            last_name=row["last_name"].strip(),
-            birth_date=row["birth_date"].strip(),
-            discharge_date=row["discharge_date"].strip(),
+            first_name=first_name,
+            last_name=last_name,
+            birth_date=birth_date,
+            discharge_date=discharge_date,
             org_id=int(org_id_val) if org_id_val else 4070,
             org_name=org_name_val if org_name_val else "Army",
         )
@@ -201,7 +212,10 @@ async def import_veterans(
         count += 1
 
     db.commit()
-    return {"message": f"成功导入 {count} 条记录"}
+    msg = f"成功导入 {count} 条记录"
+    if skipped > 0:
+        msg += f"，跳过 {skipped} 条空行"
+    return {"message": msg}
 
 
 @app.delete("/api/veterans/{veteran_id}")
