@@ -181,6 +181,39 @@ async def import_veterans(
     db: Session = Depends(get_db)
 ):
     """从 CSV 导入退伍军人数据"""
+    import re
+    from datetime import datetime as dt
+
+    def normalize_date(date_str: str) -> str:
+        """将各种日期格式转换为 YYYY-MM-DD"""
+        date_str = date_str.strip()
+        if not date_str:
+            return ""
+        # 尝试多种格式
+        formats = [
+            "%Y-%m-%d",    # 2000-01-15
+            "%Y/%m/%d",    # 2000/01/15
+            "%Y-%m-%d",    # 2000-1-5
+            "%Y/%m/%d",    # 2000/1/5
+            "%m/%d/%Y",    # 01/15/2000
+            "%m-%d-%Y",    # 01-15-2000
+            "%d/%m/%Y",    # 15/01/2000
+            "%d-%m-%Y",    # 15-01-2000
+        ]
+        for fmt in formats:
+            try:
+                parsed = dt.strptime(date_str, fmt)
+                return parsed.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        # 如果都失败，尝试用正则提取数字
+        nums = re.findall(r'\d+', date_str)
+        if len(nums) == 3:
+            y, m, d = nums[0], nums[1], nums[2]
+            if len(y) == 4:  # YYYY-M-D 或 YYYY/M/D
+                return f"{y}-{int(m):02d}-{int(d):02d}"
+        return date_str  # 返回原值
+
     content = await file.read()
     decoded = content.decode("utf-8")
     reader = csv.DictReader(io.StringIO(decoded))
@@ -190,8 +223,8 @@ async def import_veterans(
     for row in reader:
         first_name = row.get("first_name", "").strip()
         last_name = row.get("last_name", "").strip()
-        birth_date = row.get("birth_date", "").strip()
-        discharge_date = row.get("discharge_date", "").strip()
+        birth_date = normalize_date(row.get("birth_date", ""))
+        discharge_date = normalize_date(row.get("discharge_date", ""))
 
         # 跳过空行或必填字段为空的行
         if not first_name or not last_name or not birth_date or not discharge_date:
