@@ -252,7 +252,7 @@ start_frontend() {
     echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
 
     # 使用 npm run dev 开发模式启动
-    nohup npm run dev -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
+    setsid npm run dev -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
 
     local pid=$!
     echo $pid > "$PID_DIR/frontend.pid"
