@@ -187,13 +187,15 @@ async def import_veterans(
 
     count = 0
     for row in reader:
+        org_id_val = row.get("org_id", "").strip()
+        org_name_val = row.get("org_name", "").strip()
         veteran = Veteran(
-            first_name=row["first_name"],
-            last_name=row["last_name"],
-            birth_date=row["birth_date"],
-            discharge_date=row["discharge_date"],
-            org_id=int(row.get("org_id", 4070)),
-            org_name=row.get("org_name", "Army"),
+            first_name=row["first_name"].strip(),
+            last_name=row["last_name"].strip(),
+            birth_date=row["birth_date"].strip(),
+            discharge_date=row["discharge_date"].strip(),
+            org_id=int(org_id_val) if org_id_val else 4070,
+            org_name=org_name_val if org_name_val else "Army",
         )
         db.add(veteran)
         count += 1
