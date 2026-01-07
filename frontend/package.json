@@ -10,12 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^1.17.4",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.2",
+    "framer-motion": "^12.24.8",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.11.0",
+    "react-turnstile": "^1.1.4",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {

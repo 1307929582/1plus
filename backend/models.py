@@ -142,3 +142,16 @@ class ProxySettings(Base):
     password = Column(String(200), nullable=True)
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CaptchaSettings(Base):
+    __tablename__ = "captcha_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    turnstile_site_key = Column(String(200), nullable=True)
+    turnstile_secret = Column(String(200), nullable=True)
+    hcaptcha_site_key = Column(String(200), nullable=True)
+    hcaptcha_secret = Column(String(200), nullable=True)
+    is_enabled = Column(Boolean, default=False)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

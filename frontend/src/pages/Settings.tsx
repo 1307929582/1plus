@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { oauthApi, proxyApi } from '../api';
-import { Settings as SettingsIcon, Save, Eye, EyeOff, Globe, Wifi, WifiOff, CheckCircle, XCircle } from 'lucide-react';
+import { oauthApi, proxyApi, captchaApi } from '../api';
+import { Settings as SettingsIcon, Save, Eye, EyeOff, Globe, Wifi, WifiOff, CheckCircle, XCircle, Shield } from 'lucide-react';
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
@@ -27,18 +27,31 @@ export default function Settings() {
   const [testingProxy, setTestingProxy] = useState(false);
   const [proxyTestResult, setProxyTestResult] = useState<{success: boolean; ip?: string; city?: string; region?: string; country?: string; org?: string; error?: string} | null>(null);
 
+  const [captchaSettings, setCaptchaSettings] = useState({
+    turnstile_site_key: '',
+    turnstile_secret: '',
+    hcaptcha_site_key: '',
+    hcaptcha_secret: '',
+    is_enabled: false,
+  });
+  const [savingCaptcha, setSavingCaptcha] = useState(false);
+  const [showTurnstileSecret, setShowTurnstileSecret] = useState(false);
+  const [showHcaptchaSecret, setShowHcaptchaSecret] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
     try {
-      const [oauthRes, proxyRes] = await Promise.all([
+      const [oauthRes, proxyRes, captchaRes] = await Promise.all([
         oauthApi.getSettings(),
         proxyApi.getSettings(),
+        captchaApi.getSettings(),
       ]);
       setSettings(oauthRes.data);
       setProxySettings(proxyRes.data);
+      setCaptchaSettings(captchaRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -80,6 +93,18 @@ export default function Settings() {
       setProxyTestResult({ success: false, error: err.response?.data?.detail || '测试失败' });
     } finally {
       setTestingProxy(false);
+    }
+  };
+
+  const handleSaveCaptcha = async () => {
+    setSavingCaptcha(true);
+    try {
+      await captchaApi.updateSettings(captchaSettings);
+      alert('Captcha 设置已保存');
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '保存失败');
+    } finally {
+      setSavingCaptcha(false);
     }
   };
 
@@ -239,6 +264,120 @@ export default function Settings() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Captcha Settings */}
+        <div className="bg-[#12121a]/80 backdrop-blur-md rounded-2xl border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Captcha 设置</h2>
+            <div className={`ml-auto flex items-center gap-2 px-3 py-1 rounded-full text-sm ${captchaSettings.is_enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}`}>
+              {captchaSettings.is_enabled ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+              {captchaSettings.is_enabled ? '已启用' : '已禁用'}
+            </div>
+          </div>
+
+          <div className="space-y-6 max-w-xl">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCaptchaSettings({ ...captchaSettings, is_enabled: !captchaSettings.is_enabled })}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  captchaSettings.is_enabled ? 'bg-emerald-500' : 'bg-gray-600'
+                }`}
+              >
+                <div
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    captchaSettings.is_enabled ? 'left-7' : 'left-1'
+                  }`}
+                />
+              </button>
+              <span className="text-gray-300">启用 Captcha 验证</span>
+            </div>
+
+            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+              <h3 className="text-sm font-medium text-amber-400 mb-4">Cloudflare Turnstile</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">Site Key</label>
+                  <input
+                    type="text"
+                    value={captchaSettings.turnstile_site_key}
+                    onChange={(e) => setCaptchaSettings({ ...captchaSettings, turnstile_site_key: e.target.value })}
+                    placeholder="0x..."
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all duration-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">Secret Key</label>
+                  <div className="relative">
+                    <input
+                      type={showTurnstileSecret ? 'text' : 'password'}
+                      value={captchaSettings.turnstile_secret}
+                      onChange={(e) => setCaptchaSettings({ ...captchaSettings, turnstile_secret: e.target.value })}
+                      placeholder="Turnstile Secret"
+                      className="w-full px-4 py-3 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all duration-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTurnstileSecret(!showTurnstileSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                    >
+                      {showTurnstileSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+              <h3 className="text-sm font-medium text-cyan-400 mb-4">hCaptcha</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">Site Key</label>
+                  <input
+                    type="text"
+                    value={captchaSettings.hcaptcha_site_key}
+                    onChange={(e) => setCaptchaSettings({ ...captchaSettings, hcaptcha_site_key: e.target.value })}
+                    placeholder="hCaptcha Site Key"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all duration-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">Secret Key</label>
+                  <div className="relative">
+                    <input
+                      type={showHcaptchaSecret ? 'text' : 'password'}
+                      value={captchaSettings.hcaptcha_secret}
+                      onChange={(e) => setCaptchaSettings({ ...captchaSettings, hcaptcha_secret: e.target.value })}
+                      placeholder="hCaptcha Secret"
+                      className="w-full px-4 py-3 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all duration-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowHcaptchaSecret(!showHcaptchaSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                    >
+                      {showHcaptchaSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={handleSaveCaptcha}
+                disabled={savingCaptcha}
+                className="relative flex items-center gap-2 px-6 py-3 text-white font-medium rounded-xl overflow-hidden group disabled:opacity-50"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-500" />
+                <Save className="w-4 h-4 relative" />
+                <span className="relative">{savingCaptcha ? '保存中...' : '保存 Captcha 设置'}</span>
+              </button>
+            </div>
           </div>
         </div>
 

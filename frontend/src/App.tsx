@@ -4,7 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Veterans from './pages/Veterans';
 import Codes from './pages/Codes';
-import Verify from './pages/Verify';
+import Verify from './pages/verify';
 import Settings from './pages/Settings';
 import LinuxDOUsers from './pages/LinuxDOUsers';
 import OAuthCallback from './pages/OAuthCallback';

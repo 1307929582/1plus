@@ -147,4 +147,26 @@ export const proxyApi = {
   test: () => api.post('/admin/proxy/test'),
 };
 
+export const captchaApi = {
+  getSettings: () => api.get<{
+    turnstile_site_key: string;
+    turnstile_secret: string;
+    hcaptcha_site_key: string;
+    hcaptcha_secret: string;
+    is_enabled: boolean;
+  }>('/admin/captcha/settings'),
+  updateSettings: (data: {
+    turnstile_site_key?: string;
+    turnstile_secret?: string;
+    hcaptcha_site_key?: string;
+    hcaptcha_secret?: string;
+    is_enabled?: boolean;
+  }) => api.put('/admin/captcha/settings', data),
+  getPublicConfig: () => api.get<{
+    enabled: boolean;
+    turnstile_site_key: string;
+    hcaptcha_site_key: string;
+  }>('/public/captcha/config'),
+};
+
 export default api;

@@ -17,11 +17,17 @@ from sqlalchemy import func
 from pydantic import BaseModel
 
 from database import get_db, init_db, engine
-from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings, ProxySettings
+from models import Base, Veteran, RedeemCode, CodeUsage, Admin, VerificationLog, VerificationStatus, LinuxDOUser, OAuthSettings, ProxySettings, CaptchaSettings
 from sheerid_service import verify_veteran, verify_veteran_step1, complete_email_loop, extract_token_from_url
 from proxy_config import get_proxy_status
+from public_api import router as public_router
+from verification_services import configure_services, ServiceMode
+from job_manager import get_job_manager
 
-app = FastAPI(title="SheerID Veteran Verification API", version="1.0.0")
+app = FastAPI(title="SheerID Veteran Verification API", version="2.0.0")
+
+# 注册公开 API 路由
+app.include_router(public_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,6 +90,14 @@ class ProxySettingsUpdate(BaseModel):
     port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
+
+
+class CaptchaSettingsUpdate(BaseModel):
+    turnstile_site_key: Optional[str] = None
+    turnstile_secret: Optional[str] = None
+    hcaptcha_site_key: Optional[str] = None
+    hcaptcha_secret: Optional[str] = None
+    is_enabled: Optional[bool] = None
 
 
 # ==================== Auth ====================
@@ -973,6 +987,75 @@ def test_proxy(admin: Admin = Depends(verify_admin), db: Session = Depends(get_d
         return {"success": False, "error": str(e)}
 
 
+# ==================== Captcha Settings (Admin) ====================
+
+@app.get("/api/admin/captcha/settings")
+def get_captcha_settings(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """获取 Captcha 设置"""
+    settings = db.query(CaptchaSettings).first()
+    if not settings:
+        settings = CaptchaSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return {
+        "turnstile_site_key": settings.turnstile_site_key or "",
+        "turnstile_secret": "***" if settings.turnstile_secret else "",
+        "hcaptcha_site_key": settings.hcaptcha_site_key or "",
+        "hcaptcha_secret": "***" if settings.hcaptcha_secret else "",
+        "is_enabled": settings.is_enabled,
+    }
+
+
+@app.put("/api/admin/captcha/settings")
+def update_captcha_settings(data: CaptchaSettingsUpdate, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """更新 Captcha 设置"""
+    from captcha_service import configure_captcha
+
+    settings = db.query(CaptchaSettings).first()
+    if not settings:
+        settings = CaptchaSettings()
+        db.add(settings)
+
+    if data.turnstile_site_key is not None:
+        settings.turnstile_site_key = data.turnstile_site_key
+    if data.turnstile_secret is not None and data.turnstile_secret != "***":
+        settings.turnstile_secret = data.turnstile_secret
+    if data.hcaptcha_site_key is not None:
+        settings.hcaptcha_site_key = data.hcaptcha_site_key
+    if data.hcaptcha_secret is not None and data.hcaptcha_secret != "***":
+        settings.hcaptcha_secret = data.hcaptcha_secret
+    if data.is_enabled is not None:
+        settings.is_enabled = data.is_enabled
+
+    db.commit()
+
+    # 更新 captcha_service 的运行时配置
+    configure_captcha(
+        turnstile_secret=settings.turnstile_secret or "",
+        hcaptcha_secret=settings.hcaptcha_secret or ""
+    )
+
+    return {"message": "Captcha 设置已更新"}
+
+
+@app.get("/api/public/captcha/config")
+def get_captcha_public_config(db: Session = Depends(get_db)):
+    """获取 Captcha 公开配置（仅 site keys）"""
+    settings = db.query(CaptchaSettings).first()
+    if not settings or not settings.is_enabled:
+        return {
+            "enabled": False,
+            "turnstile_site_key": "",
+            "hcaptcha_site_key": "",
+        }
+    return {
+        "enabled": True,
+        "turnstile_site_key": settings.turnstile_site_key or "",
+        "hcaptcha_site_key": settings.hcaptcha_site_key or "",
+    }
+
+
 # ==================== Startup ====================
 
 @app.get("/api/proxy/status")
@@ -984,13 +1067,46 @@ def proxy_status():
 @app.on_event("startup")
 def startup():
     import logging
+    import os
     logger = logging.getLogger(__name__)
     try:
         logger.info("Starting application...")
         init_db()
         logger.info("Database initialized successfully")
+
+        # 配置验证服务模式（从环境变量读取）
+        veteran_mode = os.getenv("VETERAN_DATA_MODE", "mock")  # mock 或 real
+        sheerid_mode = os.getenv("SHEERID_MODE", "mock")  # mock 或 real
+
+        from database import SessionLocal
+        configure_services(
+            veteran_mode=veteran_mode,
+            sheerid_mode=sheerid_mode,
+            db_session_factory=SessionLocal,
+        )
+        logger.info(f"Services configured: veteran={veteran_mode}, sheerid={sheerid_mode}")
+
+        # 从数据库加载 Captcha 配置
+        from captcha_service import configure_captcha
+        db = SessionLocal()
+        try:
+            captcha_settings = db.query(CaptchaSettings).first()
+            if captcha_settings:
+                configure_captcha(
+                    turnstile_secret=captcha_settings.turnstile_secret or "",
+                    hcaptcha_secret=captcha_settings.hcaptcha_secret or ""
+                )
+                logger.info(f"Captcha configured: enabled={captcha_settings.is_enabled}")
+        finally:
+            db.close()
+
+        # 启动 job manager 清理任务
+        import asyncio
+        job_manager = get_job_manager()
+        # 注意：在同步 startup 中无法直接启动异步任务，需要在首次请求时启动
+
     except Exception as e:
-        logger.exception(f"Failed to initialize database: {e}")
+        logger.exception(f"Failed to initialize: {e}")
         raise
 
 
