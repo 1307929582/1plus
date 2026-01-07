@@ -1,10 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useVerification } from './hooks/useVerification';
 import InputPanel from './components/InputPanel';
 import StatusPanel from './components/StatusPanel';
-
-// Captcha Site Keys - 从环境变量或配置获取
-const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
-const HCAPTCHA_SITE_KEY = import.meta.env.VITE_HCAPTCHA_SITE_KEY || '';
+import { captchaApi } from '../../api';
 
 export default function Verify() {
   const {
@@ -13,6 +11,22 @@ export default function Verify() {
     completeVerification,
     reset,
   } = useVerification();
+
+  const [captchaConfig, setCaptchaConfig] = useState({
+    turnstileSiteKey: '',
+    hcaptchaSiteKey: '',
+  });
+
+  useEffect(() => {
+    captchaApi.getPublicConfig().then((res) => {
+      if (res.data.enabled) {
+        setCaptchaConfig({
+          turnstileSiteKey: res.data.turnstile_site_key || '',
+          hcaptchaSiteKey: res.data.hcaptcha_site_key || '',
+        });
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
@@ -46,8 +60,8 @@ export default function Verify() {
                 onSubmit={submitVerification}
                 onComplete={completeVerification}
                 onReset={reset}
-                turnstileSiteKey={TURNSTILE_SITE_KEY}
-                hcaptchaSiteKey={HCAPTCHA_SITE_KEY}
+                turnstileSiteKey={captchaConfig.turnstileSiteKey}
+                hcaptchaSiteKey={captchaConfig.hcaptchaSiteKey}
               />
             </div>
           </div>

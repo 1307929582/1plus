@@ -138,7 +138,6 @@ export default function InputPanel({
                 onVerify={handleCaptchaVerify}
                 turnstileSiteKey={turnstileSiteKey}
                 hcaptchaSiteKey={hcaptchaSiteKey}
-                disabled={isLoading}
               />
             </div>
 

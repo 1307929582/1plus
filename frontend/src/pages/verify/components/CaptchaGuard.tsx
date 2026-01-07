@@ -1,22 +1,26 @@
 import { useState, useRef, useCallback } from 'react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import Turnstile from 'react-turnstile';
-import { Shield, RefreshCw } from 'lucide-react';
+import { Shield, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface CaptchaGuardProps {
   onVerify: (turnstileToken: string | null, hcaptchaToken: string | null) => void;
   turnstileSiteKey?: string;
   hcaptchaSiteKey?: string;
-  disabled?: boolean;
 }
 
 export default function CaptchaGuard({
   onVerify,
   turnstileSiteKey = '',
   hcaptchaSiteKey = '',
-  disabled = false,
 }: CaptchaGuardProps) {
-  const [activeProvider, setActiveProvider] = useState<'turnstile' | 'hcaptcha'>('turnstile');
+  const hasTurnstile = !!turnstileSiteKey;
+  const hasHcaptcha = !!hcaptchaSiteKey;
+
+  // 默认选择已配置的 provider
+  const [activeProvider, setActiveProvider] = useState<'turnstile' | 'hcaptcha'>(
+    hasTurnstile ? 'turnstile' : 'hcaptcha'
+  );
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
@@ -43,28 +47,17 @@ export default function CaptchaGuard({
     onVerify(null, null);
   }, [onVerify]);
 
-  // 如果没有配置 site key，显示测试模式提示
-  const hasTurnstile = !!turnstileSiteKey;
-  const hasHcaptcha = !!hcaptchaSiteKey;
-
+  // 如果没有配置任何 Captcha，显示错误提示
   if (!hasTurnstile && !hasHcaptcha) {
     return (
-      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+      <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
         <div className="flex items-center gap-3">
-          <Shield className="w-5 h-5 text-amber-400" />
+          <AlertTriangle className="w-5 h-5 text-red-400" />
           <div>
-            <p className="text-amber-400 text-sm font-medium">测试模式</p>
-            <p className="text-gray-400 text-xs mt-1">Captcha 未配置，跳过验证</p>
+            <p className="text-red-400 text-sm font-medium">验证服务未配置</p>
+            <p className="text-gray-400 text-xs mt-1">请联系管理员配置人机验证</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onVerify('test-token', 'test-token')}
-          disabled={disabled || verified}
-          className="mt-3 w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm transition-colors disabled:opacity-50"
-        >
-          {verified ? '✓ 已验证（测试）' : '点击模拟验证'}
-        </button>
       </div>
     );
   }
