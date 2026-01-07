@@ -144,7 +144,15 @@ export function useVerification() {
 
     es.addEventListener('connected', (e) => {
       const data = JSON.parse(e.data);
-      addLog(`任务 ${data.job_id} 已创建`, 'info');
+      addLog(`任务 ${data.job_id} 已连接`, 'info');
+      // 检查初始状态，如果已经是 awaiting_email，更新 UI
+      if (data.status === 'awaiting_email') {
+        addLog('验证邮件已发送，请查收邮箱', 'success');
+        dispatch({
+          type: 'STATUS_UPDATE',
+          payload: { status: 'awaiting_email' },
+        });
+      }
     });
 
     es.addEventListener('captcha_verified', () => {
