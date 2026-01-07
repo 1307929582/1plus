@@ -34,10 +34,10 @@ export default function InputPanel({
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
 
-  const isStep1 = status === 'idle' || status === 'captcha_wait' || status === 'submitting';
-  const isStep2 = status === 'awaiting_email' || status === 'completing';
+  const isStep1 = status === 'idle' || status === 'getting_veteran' || status === 'submitting_step1';
+  const isStep2 = status === 'awaiting_email' || status === 'submitting_step2';
   const isComplete = status === 'success' || status === 'failed';
-  const isLoading = status === 'submitting' || status === 'completing';
+  const isLoading = status === 'getting_veteran' || status === 'submitting_step1' || status === 'submitting_step2';
 
   const handleCaptchaVerify = useCallback((t: string | null, h: string | null) => {
     setTurnstileToken(t);

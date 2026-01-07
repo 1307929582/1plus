@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useRef, useEffect } from 'react';
+import { useReducer, useCallback } from 'react';
 
 // API 基础 URL
 const getApiBase = () => {
@@ -8,13 +8,15 @@ const getApiBase = () => {
   return `${window.location.protocol}//${window.location.hostname}:14100/api`;
 };
 
+const SHEERID_BASE = 'https://services.sheerid.com';
+
 // 状态类型
 export type VerificationStatus =
   | 'idle'
-  | 'captcha_wait'
-  | 'submitting'
+  | 'getting_veteran'
+  | 'submitting_step1'
   | 'awaiting_email'
-  | 'completing'
+  | 'submitting_step2'
   | 'success'
   | 'failed';
 
@@ -25,21 +27,32 @@ export interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
+export interface VeteranData {
+  first_name: string;
+  last_name: string;
+  birth_date: string;
+  discharge_date: string;
+  org_id: number;
+  org_name: string;
+}
+
 export interface VerificationState {
   status: VerificationStatus;
-  jobId: string | null;
+  veteran: VeteranData | null;
   verificationId: string | null;
-  veteranName: string | null;
+  fingerprint: string | null;
+  email: string | null;
   message: string | null;
   error: string | null;
   logs: LogEntry[];
 }
 
 type Action =
-  | { type: 'START_SUBMIT' }
-  | { type: 'CAPTCHA_VERIFIED' }
-  | { type: 'JOB_CREATED'; payload: { jobId: string } }
-  | { type: 'STATUS_UPDATE'; payload: { status: string; message?: string; veteranName?: string; verificationId?: string } }
+  | { type: 'START_GET_VETERAN' }
+  | { type: 'VETERAN_RECEIVED'; payload: VeteranData }
+  | { type: 'START_STEP1'; payload: { email: string } }
+  | { type: 'STEP1_SUCCESS'; payload: { verificationId: string; fingerprint: string } }
+  | { type: 'START_STEP2' }
   | { type: 'SUCCESS'; payload: { message: string } }
   | { type: 'FAILED'; payload: { error: string } }
   | { type: 'ADD_LOG'; payload: LogEntry }
@@ -47,9 +60,10 @@ type Action =
 
 const initialState: VerificationState = {
   status: 'idle',
-  jobId: null,
+  veteran: null,
   verificationId: null,
-  veteranName: null,
+  fingerprint: null,
+  email: null,
   message: null,
   error: null,
   logs: [],
@@ -57,55 +71,79 @@ const initialState: VerificationState = {
 
 function reducer(state: VerificationState, action: Action): VerificationState {
   switch (action.type) {
-    case 'START_SUBMIT':
-      return { ...state, status: 'submitting', error: null, message: null };
-
-    case 'CAPTCHA_VERIFIED':
-      return { ...state, status: 'captcha_wait' };
-
-    case 'JOB_CREATED':
-      return { ...state, jobId: action.payload.jobId };
-
-    case 'STATUS_UPDATE': {
-      const { status, message, veteranName, verificationId } = action.payload;
-      let newStatus: VerificationStatus = state.status;
-
-      if (status === 'awaiting_email') newStatus = 'awaiting_email';
-      else if (status === 'submitting_step2') newStatus = 'completing';
-      else if (status === 'success') newStatus = 'success';
-      else if (status === 'failed') newStatus = 'failed';
-
+    case 'START_GET_VETERAN':
+      return { ...state, status: 'getting_veteran', error: null };
+    case 'VETERAN_RECEIVED':
+      return { ...state, veteran: action.payload };
+    case 'START_STEP1':
+      return { ...state, status: 'submitting_step1', email: action.payload.email };
+    case 'STEP1_SUCCESS':
       return {
         ...state,
-        status: newStatus,
-        message: message || state.message,
-        veteranName: veteranName || state.veteranName,
-        verificationId: verificationId || state.verificationId,
+        status: 'awaiting_email',
+        verificationId: action.payload.verificationId,
+        fingerprint: action.payload.fingerprint,
       };
-    }
-
+    case 'START_STEP2':
+      return { ...state, status: 'submitting_step2' };
     case 'SUCCESS':
       return { ...state, status: 'success', message: action.payload.message };
-
     case 'FAILED':
       return { ...state, status: 'failed', error: action.payload.error };
-
     case 'ADD_LOG':
       return { ...state, logs: [action.payload, ...state.logs].slice(0, 50) };
-
     case 'RESET':
       return { ...initialState, logs: state.logs };
-
     default:
       return state;
   }
 }
 
+// 从 URL 提取 verificationId
+function extractVerificationId(url: string): string | null {
+  const patterns = [
+    /verificationId=([a-f0-9]+)/i,
+    /\/verification\/([a-f0-9]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// 从邮件链接提取 token
+function extractEmailToken(input: string): string {
+  const patterns = [
+    /[?&]emailToken=(\d+)/,
+    /[?&]token=(\d+)/,
+    /\/token\/(\d+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    if (match) return match[1];
+  }
+  return input.trim();
+}
+
+// 获取 UDID 指纹
+async function getUdid(): Promise<string> {
+  try {
+    const resp = await fetch('https://fn.us.fd.sheerid.com/udid/udid.json');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.udid) return String(data.udid);
+    }
+  } catch (e) {
+    console.warn('Failed to get UDID:', e);
+  }
+  // 备用：生成随机指纹
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 export function useVerification() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // 添加日志
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     dispatch({
       type: 'ADD_LOG',
@@ -118,191 +156,200 @@ export function useVerification() {
     });
   }, []);
 
-  // 关闭 SSE 连接
-  const closeEventSource = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+  // 上报结果到后端
+  const reportResult = useCallback(async (veteran: VeteranData, email: string, success: boolean, errorMsg?: string) => {
+    try {
+      await fetch(`${getApiBase()}/public/verify/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...veteran,
+          email,
+          success,
+          error_message: errorMsg,
+        }),
+      });
+    } catch (e) {
+      console.warn('Failed to report result:', e);
     }
   }, []);
 
-  // 订阅 SSE 事件
-  const subscribeToJob = useCallback((jobId: string) => {
-    closeEventSource();
-
-    const url = `${getApiBase()}/public/verify/stream/${jobId}`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      addLog('已连接到服务器', 'info');
-    };
-
-    es.onerror = () => {
-      addLog('连接断开', 'warning');
-    };
-
-    es.addEventListener('connected', (e) => {
-      const data = JSON.parse(e.data);
-      addLog(`任务 ${data.job_id} 已连接`, 'info');
-      // 检查初始状态，如果已经是 awaiting_email，更新 UI
-      if (data.status === 'awaiting_email') {
-        addLog('验证邮件已发送，请查收邮箱', 'success');
-        dispatch({
-          type: 'STATUS_UPDATE',
-          payload: { status: 'awaiting_email' },
-        });
-      }
-    });
-
-    es.addEventListener('captcha_verified', () => {
-      addLog('Captcha 验证通过', 'success');
-    });
-
-    es.addEventListener('fetching_veteran', () => {
-      addLog('正在获取验证数据...', 'info');
-    });
-
-    es.addEventListener('submitting_step1', (e) => {
-      const data = JSON.parse(e.data);
-      if (data.data?.veteran_name) {
-        addLog(`正在验证: ${data.data.veteran_name}`, 'info');
-        dispatch({ type: 'STATUS_UPDATE', payload: { status: 'submitting', veteranName: data.data.veteran_name } });
-      }
-    });
-
-    es.addEventListener('awaiting_email', (e) => {
-      const data = JSON.parse(e.data);
-      addLog('验证邮件已发送，请查收邮箱', 'success');
-      dispatch({
-        type: 'STATUS_UPDATE',
-        payload: {
-          status: 'awaiting_email',
-          message: data.data?.message,
-          verificationId: data.data?.verification_id,
-        },
-      });
-    });
-
-    es.addEventListener('submitting_step2', () => {
-      addLog('正在验证 token...', 'info');
-    });
-
-    es.addEventListener('success', (e) => {
-      const data = JSON.parse(e.data);
-      addLog('验证成功！', 'success');
-      dispatch({ type: 'SUCCESS', payload: { message: data.data?.message || '验证成功！' } });
-      closeEventSource();
-    });
-
-    es.addEventListener('failed', (e) => {
-      const data = JSON.parse(e.data);
-      addLog(`验证失败: ${data.data?.message || '未知错误'}`, 'error');
-      dispatch({ type: 'FAILED', payload: { error: data.data?.message || '验证失败' } });
-      closeEventSource();
-    });
-
-    es.addEventListener('heartbeat', () => {
-      // 心跳，保持连接
-    });
-  }, [addLog, closeEventSource]);
-
-  // 提交验证
+  // 提交验证（Step 1）
   const submitVerification = useCallback(async (
     url: string,
     email: string,
     turnstileToken: string | null,
     hcaptchaToken: string | null,
-    fingerprint?: string,
   ) => {
-    dispatch({ type: 'START_SUBMIT' });
-    addLog('正在提交验证请求...', 'info');
+    dispatch({ type: 'START_GET_VETERAN' });
+    addLog('正在获取验证数据...', 'info');
 
     try {
-      const response = await fetch(`${getApiBase()}/public/verify/submit`, {
+      // 1. 从后端获取 veteran 数据
+      const veteranResp = await fetch(`${getApiBase()}/public/veteran/next`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url,
-          email,
           turnstile_token: turnstileToken,
           hcaptcha_token: hcaptchaToken,
-          fingerprint,
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || '提交失败');
+      const veteranData = await veteranResp.json();
+      if (!veteranResp.ok) {
+        throw new Error(veteranData.detail || '获取数据失败');
       }
 
-      if (data.success && data.job_id) {
-        dispatch({ type: 'JOB_CREATED', payload: { jobId: data.job_id } });
-        addLog(`任务已创建: ${data.job_id}`, 'success');
-        subscribeToJob(data.job_id);
+      const veteran: VeteranData = veteranData.veteran;
+      dispatch({ type: 'VETERAN_RECEIVED', payload: veteran });
+      addLog(`获取到: ${veteran.first_name} ${veteran.last_name[0]}.`, 'success');
+
+      // 2. 提取 verificationId
+      const verificationId = extractVerificationId(url);
+      if (!verificationId) {
+        throw new Error('无法从 URL 提取 verificationId');
+      }
+      addLog(`验证 ID: ${verificationId.slice(0, 8)}...`, 'info');
+
+      // 3. 获取指纹
+      dispatch({ type: 'START_STEP1', payload: { email } });
+      addLog('正在获取设备指纹...', 'info');
+      const fingerprint = await getUdid();
+      addLog(`指纹: ${fingerprint.slice(0, 8)}...`, 'info');
+
+      // 4. 调用 SheerID Step 1: collectMilitaryStatus
+      addLog('提交军人状态...', 'info');
+      const step1Resp = await fetch(
+        `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectMilitaryStatus`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ status: 'VETERAN' }),
+        }
+      );
+
+      if (!step1Resp.ok) {
+        const errText = await step1Resp.text();
+        throw new Error(`Step1 失败: ${step1Resp.status} - ${errText}`);
+      }
+
+      // 5. 调用 SheerID Step 2: collectInactiveMilitaryPersonalInfo
+      addLog('提交个人信息...', 'info');
+      const step2Resp = await fetch(
+        `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectInactiveMilitaryPersonalInfo`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            firstName: veteran.first_name,
+            lastName: veteran.last_name,
+            birthDate: veteran.birth_date,
+            dischargeDate: veteran.discharge_date,
+            email: email,
+            phoneNumber: '',
+            country: 'US',
+            locale: 'en-US',
+            organization: { id: veteran.org_id, name: veteran.org_name },
+            deviceFingerprintHash: fingerprint,
+            metadata: { marketConsentValue: false, refererUrl: url },
+          }),
+        }
+      );
+
+      const result = await step2Resp.json();
+      const currentStep = result.currentStep || 'unknown';
+
+      if (currentStep === 'emailLoop') {
+        dispatch({ type: 'STEP1_SUCCESS', payload: { verificationId, fingerprint } });
+        addLog('验证邮件已发送，请查收邮箱', 'success');
+      } else if (currentStep === 'success') {
+        dispatch({ type: 'SUCCESS', payload: { message: '验证成功！' } });
+        addLog('验证成功！', 'success');
+        await reportResult(veteran, email, true);
+      } else if (currentStep === 'error') {
+        const errMsg = result.systemErrorMessage || '验证失败';
+        throw new Error(errMsg);
       } else {
-        throw new Error(data.error || '提交失败');
+        // 其他状态也当作需要邮件验证
+        dispatch({ type: 'STEP1_SUCCESS', payload: { verificationId, fingerprint } });
+        addLog(`状态: ${currentStep}`, 'warning');
       }
+
     } catch (err: any) {
       addLog(`错误: ${err.message}`, 'error');
       dispatch({ type: 'FAILED', payload: { error: err.message } });
+      if (state.veteran && state.email) {
+        await reportResult(state.veteran, state.email, false, err.message);
+      }
     }
-  }, [addLog, subscribeToJob]);
+  }, [addLog, reportResult, state.veteran, state.email]);
 
   // 完成验证（提交邮件 token）
   const completeVerification = useCallback(async (
-    emailToken: string,
-    turnstileToken?: string | null,
-    hcaptchaToken?: string | null,
+    emailTokenInput: string,
   ) => {
-    if (!state.jobId) {
-      addLog('错误: 没有活跃的任务', 'error');
+    if (!state.verificationId || !state.fingerprint || !state.veteran || !state.email) {
+      addLog('错误: 缺少必要数据', 'error');
       return;
     }
 
-    addLog('正在提交验证码...', 'info');
+    dispatch({ type: 'START_STEP2' });
+    const emailToken = extractEmailToken(emailTokenInput);
+    addLog(`提交验证码: ${emailToken}`, 'info');
 
     try {
-      const response = await fetch(`${getApiBase()}/public/verify/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          job_id: state.jobId,
-          email_token: emailToken,
-          turnstile_token: turnstileToken,
-          hcaptcha_token: hcaptchaToken,
-        }),
-      });
+      const resp = await fetch(
+        `${SHEERID_BASE}/rest/v2/verification/${state.verificationId}/step/emailLoop`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            emailToken: emailToken,
+            deviceFingerprintHash: state.fingerprint,
+          }),
+        }
+      );
 
-      const data = await response.json();
+      const result = await resp.json();
+      const currentStep = result.currentStep || 'unknown';
 
-      if (data.success) {
+      if (currentStep === 'success') {
+        dispatch({ type: 'SUCCESS', payload: { message: '验证成功！' } });
         addLog('验证成功！', 'success');
-        dispatch({ type: 'SUCCESS', payload: { message: data.message || '验证成功！' } });
+        await reportResult(state.veteran, state.email, true);
+      } else if (currentStep === 'error') {
+        const errorIds = result.errorIds || [];
+        let errMsg = '验证失败';
+        if (errorIds.includes('invalidEmailLoopToken')) {
+          errMsg = 'Token 无效，请检查是否正确';
+        } else if (errorIds.includes('expiredEmailLoopToken')) {
+          errMsg = 'Token 已过期，请重新验证';
+        }
+        throw new Error(errMsg);
       } else {
-        addLog(`验证失败: ${data.error}`, 'error');
-        dispatch({ type: 'FAILED', payload: { error: data.error || '验证失败' } });
+        addLog(`状态: ${currentStep}`, 'warning');
       }
+
     } catch (err: any) {
       addLog(`错误: ${err.message}`, 'error');
       dispatch({ type: 'FAILED', payload: { error: err.message } });
+      await reportResult(state.veteran, state.email, false, err.message);
     }
-  }, [state.jobId, addLog]);
+  }, [state.verificationId, state.fingerprint, state.veteran, state.email, addLog, reportResult]);
 
-  // 重置状态
   const reset = useCallback(() => {
-    closeEventSource();
     dispatch({ type: 'RESET' });
     addLog('已重置', 'info');
-  }, [closeEventSource, addLog]);
-
-  // 清理
-  useEffect(() => {
-    return () => {
-      closeEventSource();
-    };
-  }, [closeEventSource]);
+  }, [addLog]);
 
   return {
     state,

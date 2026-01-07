@@ -12,10 +12,10 @@ interface StatusPanelProps {
 
 const statusConfig = {
   idle: { icon: Clock, color: 'text-gray-400', bg: 'bg-gray-500/10' },
-  captcha_wait: { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-  submitting: { icon: Activity, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+  getting_veteran: { icon: Activity, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+  submitting_step1: { icon: Activity, color: 'text-violet-400', bg: 'bg-violet-500/10' },
   awaiting_email: { icon: AlertCircle, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-  completing: { icon: Activity, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+  submitting_step2: { icon: Activity, color: 'text-violet-400', bg: 'bg-violet-500/10' },
   success: { icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   failed: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10' },
 };
@@ -48,10 +48,10 @@ export default function StatusPanel({
           <div className="flex-1">
             <p className={`font-medium ${config.color}`}>
               {status === 'idle' && '等待提交'}
-              {status === 'captcha_wait' && '等待验证'}
-              {status === 'submitting' && '正在提交...'}
+              {status === 'getting_veteran' && '获取验证数据...'}
+              {status === 'submitting_step1' && '正在提交验证...'}
               {status === 'awaiting_email' && '等待邮件验证'}
-              {status === 'completing' && '正在完成验证...'}
+              {status === 'submitting_step2' && '正在完成验证...'}
               {status === 'success' && '验证成功'}
               {status === 'failed' && '验证失败'}
             </p>
@@ -78,10 +78,10 @@ export default function StatusPanel({
           animate={{
             width:
               status === 'idle' ? '0%' :
-              status === 'captcha_wait' ? '10%' :
-              status === 'submitting' ? '40%' :
+              status === 'getting_veteran' ? '20%' :
+              status === 'submitting_step1' ? '40%' :
               status === 'awaiting_email' ? '60%' :
-              status === 'completing' ? '80%' :
+              status === 'submitting_step2' ? '80%' :
               status === 'success' ? '100%' :
               status === 'failed' ? '100%' : '0%',
           }}
