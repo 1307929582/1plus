@@ -29,6 +29,7 @@ def init_db():
 
 def _run_migrations():
     with engine.begin() as conn:
+        # redeem_codes migrations
         result = conn.execute(text("PRAGMA table_info(redeem_codes)"))
         columns = [row[1] for row in result.fetchall()]
         if "linuxdo_user_id" not in columns:
@@ -37,11 +38,26 @@ def _run_migrations():
             except Exception:
                 pass
 
+        # oauth_settings migrations
         result = conn.execute(text("PRAGMA table_info(oauth_settings)"))
         columns = [row[1] for row in result.fetchall()]
         if "min_trust_level" not in columns:
             try:
                 conn.execute(text("ALTER TABLE oauth_settings ADD COLUMN min_trust_level INTEGER DEFAULT 0"))
+            except Exception:
+                pass
+
+        # verification_history migrations
+        result = conn.execute(text("PRAGMA table_info(verification_history)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "client_ip" not in columns:
+            try:
+                conn.execute(text("ALTER TABLE verification_history ADD COLUMN client_ip VARCHAR(50)"))
+            except Exception:
+                pass
+        if "email" not in columns:
+            try:
+                conn.execute(text("ALTER TABLE verification_history ADD COLUMN email VARCHAR(200)"))
             except Exception:
                 pass
 
