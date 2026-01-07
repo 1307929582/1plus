@@ -124,9 +124,9 @@ export default function Dashboard() {
         ))}
 
         {/* 计数器管理卡片 */}
-        <div className="relative bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10 overflow-hidden">
-          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full opacity-10 blur-2xl" />
-          <div className="relative">
+        <div className="relative bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full opacity-10 blur-2xl pointer-events-none" />
+          <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
               <p className="text-gray-400 text-sm">当前计数器</p>
               <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 shadow-lg shadow-black/20">
@@ -139,13 +139,13 @@ export default function Dashboard() {
                 min="1"
                 value={counterInput}
                 onChange={(e) => setCounterInput(e.target.value)}
-                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-lg font-bold focus:outline-none focus:border-amber-500/50"
+                className="flex-1 min-w-0 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-lg font-bold focus:outline-none focus:border-amber-500/50"
                 disabled={counterLoading}
               />
               <button
                 onClick={handleSetCounter}
                 disabled={counterLoading}
-                className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors disabled:opacity-50"
+                className="shrink-0 p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors disabled:opacity-50"
                 title="保存"
               >
                 <Save className="w-5 h-5" />
@@ -153,7 +153,7 @@ export default function Dashboard() {
               <button
                 onClick={handleResetCounter}
                 disabled={counterLoading}
-                className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg transition-colors disabled:opacity-50"
+                className="shrink-0 p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg transition-colors disabled:opacity-50"
                 title="重置为 1"
               >
                 <RotateCcw className="w-5 h-5" />
