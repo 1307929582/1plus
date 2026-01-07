@@ -70,17 +70,6 @@ class DashboardStats(BaseModel):
     pending_veterans: int
     verified_veterans: int
     failed_veterans: int
-    total_codes: int
-    active_codes: int
-    total_verifications_today: int
-
-
-class OAuthSettingsUpdate(BaseModel):
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    is_enabled: Optional[bool] = None
-    codes_per_user: Optional[int] = None
-    min_trust_level: Optional[int] = None
 
 
 class ProxySettingsUpdate(BaseModel):
@@ -152,20 +141,11 @@ def admin_login(data: AdminLogin, db: Session = Depends(get_db)):
 
 @app.get("/api/dashboard", response_model=DashboardStats)
 def get_dashboard(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
-    today = datetime.utcnow().date()
-
     stats = DashboardStats(
         total_veterans=db.query(Veteran).count(),
         pending_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).count(),
         verified_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.SUCCESS).count(),
         failed_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.FAILED).count(),
-        total_codes=db.query(RedeemCode).count(),
-        active_codes=db.query(RedeemCode).filter(RedeemCode.is_active == True).filter(
-            RedeemCode.used_count < RedeemCode.total_uses
-        ).count(),
-        total_verifications_today=db.query(CodeUsage).filter(
-            func.date(CodeUsage.created_at) == today
-        ).count()
     )
     return stats
 
@@ -228,19 +208,21 @@ async def import_veterans(
                 return f"{y}-{int(m):02d}-{int(d):02d}"
         return date_str  # 返回原值
 
+    BATCH_SIZE = 500
     content = await file.read()
     decoded = content.decode("utf-8")
     reader = csv.DictReader(io.StringIO(decoded))
 
     count = 0
     skipped = 0
+    batch = []
+
     for row in reader:
         first_name = row.get("first_name", "").strip()
         last_name = row.get("last_name", "").strip()
         birth_date = normalize_date(row.get("birth_date", ""))
         discharge_date = normalize_date(row.get("discharge_date", ""))
 
-        # 跳过空行或必填字段为空的行
         if not first_name or not last_name or not birth_date or not discharge_date:
             skipped += 1
             continue
@@ -255,10 +237,18 @@ async def import_veterans(
             org_id=int(org_id_val) if org_id_val else 4070,
             org_name=org_name_val if org_name_val else "Army",
         )
-        db.add(veteran)
+        batch.append(veteran)
         count += 1
 
-    db.commit()
+        if len(batch) >= BATCH_SIZE:
+            db.bulk_save_objects(batch)
+            db.commit()
+            batch = []
+
+    if batch:
+        db.bulk_save_objects(batch)
+        db.commit()
+
     msg = f"成功导入 {count} 条记录"
     if skipped > 0:
         msg += f"，跳过 {skipped} 条空行"

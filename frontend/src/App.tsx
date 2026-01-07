@@ -3,11 +3,8 @@ import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Veterans from './pages/Veterans';
-import Codes from './pages/Codes';
 import Verify from './pages/verify';
 import Settings from './pages/Settings';
-import LinuxDOUsers from './pages/LinuxDOUsers';
-import OAuthCallback from './pages/OAuthCallback';
 import Layout from './components/Layout';
 
 function App() {
@@ -33,14 +30,11 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Verify />} />
-        <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/admin" element={
           isAuth ? <Layout onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
         }>
           <Route index element={<Dashboard />} />
           <Route path="veterans" element={<Veterans />} />
-          <Route path="codes" element={<Codes />} />
-          <Route path="users" element={<LinuxDOUsers />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />

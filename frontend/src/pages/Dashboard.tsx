@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { dashboardApi } from '../api';
 import type { DashboardStats } from '../api';
-import { Users, CheckCircle, XCircle, Clock, Ticket, Activity } from 'lucide-react';
+import { Users, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -55,25 +55,13 @@ export default function Dashboard() {
       icon: XCircle,
       gradient: 'from-rose-500 to-red-500',
     },
-    {
-      label: '有效兑换码',
-      value: stats?.active_codes || 0,
-      icon: Ticket,
-      gradient: 'from-purple-500 to-violet-500',
-    },
-    {
-      label: '今日验证',
-      value: stats?.total_verifications_today || 0,
-      icon: Activity,
-      gradient: 'from-fuchsia-500 to-pink-500',
-    },
   ];
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-white mb-8">仪表盘</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((card) => (
           <div
             key={card.label}
