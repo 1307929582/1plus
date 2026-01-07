@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db, init_db
-from models import Admin, MockDataCounter, VerificationHistory, ProxySettings, CaptchaSettings, SiteSettings
+from models import Admin, MockDataCounter, VerificationHistory, ProxySettings, CaptchaSettings, SiteSettings, now_utc8
 from proxy_config import get_proxy_status
 from public_api import router as public_router
 from verification_services import configure_services
@@ -150,7 +150,7 @@ def admin_login(data: AdminLogin, db: Session = Depends(get_db)):
     admin = db.query(Admin).filter(Admin.username == data.username).first()
     if not admin or admin.password_hash != hash_password(data.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    admin.last_login = datetime.utcnow()
+    admin.last_login = now_utc8()
     db.commit()
     return {"message": "Login successful", "username": admin.username}
 

@@ -1,11 +1,19 @@
 """
 数据库模型
 """
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
+
+# UTC+8 时区
+UTC8 = timezone(timedelta(hours=8))
+
+
+def now_utc8():
+    """返回 UTC+8 当前时间"""
+    return datetime.now(UTC8).replace(tzinfo=None)
 
 
 class Admin(Base):
@@ -16,7 +24,7 @@ class Admin(Base):
     password_hash = Column(String(200), nullable=False)
     is_active = Column(Boolean, default=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_utc8)
     last_login = Column(DateTime, nullable=True)
 
 
@@ -32,10 +40,10 @@ class VerificationHistory(Base):
     org_id = Column(Integer, nullable=False)
     org_name = Column(String(100), nullable=False)
     email = Column(String(200), nullable=True)
-    client_ip = Column(String(50), nullable=True)  # 客户端 IP
+    client_ip = Column(String(50), nullable=True)
     success = Column(Boolean, default=False)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_utc8)
 
 
 class MockDataCounter(Base):
@@ -44,7 +52,7 @@ class MockDataCounter(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     counter = Column(Integer, default=1)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_utc8, onupdate=now_utc8)
 
 
 class ProxySettings(Base):
@@ -58,7 +66,7 @@ class ProxySettings(Base):
     username = Column(String(200), nullable=True)
     password = Column(String(200), nullable=True)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_utc8, onupdate=now_utc8)
 
 
 class CaptchaSettings(Base):
@@ -71,7 +79,7 @@ class CaptchaSettings(Base):
     hcaptcha_secret = Column(String(200), nullable=True)
     is_enabled = Column(Boolean, default=False)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_utc8, onupdate=now_utc8)
 
 
 class SiteSettings(Base):
@@ -86,4 +94,4 @@ class SiteSettings(Base):
     right_ad_enabled = Column(Boolean, default=False)
     right_ad_content = Column(Text, nullable=True)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_utc8, onupdate=now_utc8)
