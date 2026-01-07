@@ -46,6 +46,7 @@ class VerificationJob:
     verification_id: Optional[str] = None
     fingerprint: Optional[str] = None
     veteran_name: Optional[str] = None
+    veteran_data: Optional[Dict[str, Any]] = None  # 保存完整的 veteran 数据
     message: Optional[str] = None
     error: Optional[str] = None
     events: List[JobEvent] = field(default_factory=list)
@@ -142,6 +143,7 @@ class JobManager:
         verification_id: Optional[str] = None,
         fingerprint: Optional[str] = None,
         veteran_name: Optional[str] = None,
+        veteran_data: Optional[Dict[str, Any]] = None,
         message: Optional[str] = None,
         error: Optional[str] = None,
     ) -> Optional[VerificationJob]:
@@ -158,6 +160,8 @@ class JobManager:
             job.fingerprint = fingerprint
         if veteran_name:
             job.veteran_name = veteran_name
+        if veteran_data:
+            job.veteran_data = veteran_data
         if message:
             job.message = message
         if error:

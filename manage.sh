@@ -39,7 +39,31 @@ if [[ "$(uname)" == "Linux" ]]; then
     IS_PRODUCTION=true
 fi
 
+# 检测 PM2 是否可用
+HAS_PM2=false
+if command -v pm2 &> /dev/null; then
+    HAS_PM2=true
+fi
+
 mkdir -p "$PID_DIR" "$LOG_DIR"
+
+# 安装 PM2（生产环境自动安装）
+install_pm2() {
+    if $HAS_PM2; then
+        return 0
+    fi
+
+    echo -e "${YELLOW}检测到生产环境，正在安装 PM2...${NC}"
+    npm install -g pm2 --silent
+    if command -v pm2 &> /dev/null; then
+        HAS_PM2=true
+        echo -e "${GREEN}✓ PM2 安装成功${NC}"
+        return 0
+    else
+        echo -e "${RED}✗ PM2 安装失败，将使用 nohup 模式${NC}"
+        return 1
+    fi
+}
 
 show_logo() {
     echo -e "${PURPLE}"
@@ -116,22 +140,46 @@ status() {
     echo -e "${CYAN}═══════════════════ 服务状态 ═══════════════════${NC}"
     echo ""
 
-    if is_running "backend"; then
+    # 检查 PM2 模式
+    local backend_pm2=false
+    local frontend_pm2=false
+    if $HAS_PM2; then
+        pm2 describe sheerid-backend &>/dev/null && backend_pm2=true
+        pm2 describe sheerid-frontend &>/dev/null && frontend_pm2=true
+    fi
+
+    # 后端状态
+    if $backend_pm2; then
+        local pm2_status=$(pm2 jlist 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((p['pm2_env']['status'] for p in d if p['name']=='sheerid-backend'), 'stopped'))" 2>/dev/null || echo "unknown")
+        if [ "$pm2_status" = "online" ]; then
+            echo -e "  后端服务 (API)   : ${GREEN}● 运行中${NC} (PM2: sheerid-backend)"
+        else
+            echo -e "  后端服务 (API)   : ${RED}○ $pm2_status${NC} (PM2)"
+        fi
+    elif is_running "backend"; then
         echo -e "  后端服务 (API)   : ${GREEN}● 运行中${NC} (PID: $(get_pid backend))"
-        echo -e "                     ${BLUE}http://localhost:$BACKEND_PORT${NC}"
     else
         echo -e "  后端服务 (API)   : ${RED}○ 未运行${NC}"
     fi
+    echo -e "                     ${BLUE}http://localhost:$BACKEND_PORT${NC}"
 
     echo ""
 
-    if is_running "frontend"; then
+    # 前端状态
+    if $frontend_pm2; then
+        local pm2_status=$(pm2 jlist 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((p['pm2_env']['status'] for p in d if p['name']=='sheerid-frontend'), 'stopped'))" 2>/dev/null || echo "unknown")
+        if [ "$pm2_status" = "online" ]; then
+            echo -e "  前端服务         : ${GREEN}● 运行中${NC} (PM2: sheerid-frontend)"
+        else
+            echo -e "  前端服务         : ${RED}○ $pm2_status${NC} (PM2)"
+        fi
+    elif is_running "frontend"; then
         echo -e "  前端服务 (Vite)  : ${GREEN}● 运行中${NC} (PID: $(get_pid frontend))"
-        echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT${NC}"
-        echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT/admin${NC}"
     else
         echo -e "  前端服务 (Vite)  : ${RED}○ 未运行${NC}"
     fi
+    echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT${NC}"
+    echo -e "                     ${BLUE}http://localhost:$FRONTEND_PORT/admin${NC}"
 
     echo ""
 
@@ -143,11 +191,33 @@ status() {
     fi
 
     echo ""
+
+    # 显示运行模式
+    if $IS_PRODUCTION; then
+        echo -e "  运行模式         : ${PURPLE}生产环境${NC}"
+        if $HAS_PM2; then
+            echo -e "  进程管理         : ${GREEN}PM2${NC}"
+        else
+            echo -e "  进程管理         : ${YELLOW}nohup (建议安装 PM2)${NC}"
+        fi
+    else
+        echo -e "  运行模式         : ${YELLOW}开发环境${NC}"
+    fi
+
+    echo ""
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }
 
 stop_backend() {
     echo -e "${BLUE}停止后端服务...${NC}"
+
+    # PM2 模式
+    if $HAS_PM2 && pm2 describe sheerid-backend &>/dev/null; then
+        pm2 delete sheerid-backend 2>/dev/null
+        pm2 save --force 2>/dev/null
+        echo -e "${GREEN}✓ 后端服务已停止 (PM2)${NC}"
+        return 0
+    fi
 
     # 先尝试优雅停止
     if is_running "backend"; then
@@ -167,6 +237,14 @@ stop_backend() {
 
 stop_frontend() {
     echo -e "${BLUE}停止前端服务...${NC}"
+
+    # PM2 模式
+    if $HAS_PM2 && pm2 describe sheerid-frontend &>/dev/null; then
+        pm2 delete sheerid-frontend 2>/dev/null
+        pm2 save --force 2>/dev/null
+        echo -e "${GREEN}✓ 前端服务已停止 (PM2)${NC}"
+        return 0
+    fi
 
     # 先尝试优雅停止
     if is_running "frontend"; then
@@ -207,10 +285,24 @@ start_backend() {
         PYTHON_BIN="python3"
     fi
 
-    # 清空旧日志，方便查看新的启动信息
-    echo "=== Backend starting at $(date) ===" > "$LOG_DIR/backend.log"
+    # 生产环境使用 PM2
+    if $IS_PRODUCTION && $HAS_PM2; then
+        echo -e "${CYAN}使用 PM2 启动后端...${NC}"
+        pm2 delete sheerid-backend 2>/dev/null || true
+        pm2 start "$PYTHON_BIN" --name sheerid-backend \
+            --interpreter none \
+            -- -u -m uvicorn main:app \
+            --host 0.0.0.0 \
+            --port $BACKEND_PORT \
+            --workers 1
+        pm2 save --force 2>/dev/null
+        echo -e "${GREEN}✓ 后端服务已启动 (PM2: sheerid-backend)${NC}"
+        pm2 logs sheerid-backend --lines 5 --nostream
+        return 0
+    fi
 
-    # 使用 nohup + 完全后台运行
+    # 开发环境使用 nohup
+    echo "=== Backend starting at $(date) ===" > "$LOG_DIR/backend.log"
     nohup "$PYTHON_BIN" -u -m uvicorn main:app \
         --host 0.0.0.0 \
         --port $BACKEND_PORT \
@@ -220,12 +312,10 @@ start_backend() {
     local pid=$!
     echo $pid > "$PID_DIR/backend.pid"
 
-    # 等待并检查是否真正启动
     sleep 3
 
     if ps -p $pid > /dev/null 2>&1; then
         echo -e "${GREEN}✓ 后端服务已启动 (PID: $pid)${NC}"
-        # 显示最后几行日志
         echo -e "${CYAN}启动日志:${NC}"
         tail -5 "$LOG_DIR/backend.log"
     else
@@ -248,10 +338,33 @@ start_frontend() {
 
     cd "$FRONTEND_DIR"
 
-    # 清空旧日志
-    echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
+    # 生产环境使用 PM2 + 静态服务
+    if $IS_PRODUCTION && $HAS_PM2; then
+        echo -e "${CYAN}使用 PM2 启动前端...${NC}"
 
-    # 使用 npm run dev 开发模式启动 (nohup 兼容 macOS)
+        # 构建生产版本
+        if [ ! -d "dist" ] || [ "$(find src -newer dist -type f 2>/dev/null | head -1)" ]; then
+            echo -e "${YELLOW}构建前端...${NC}"
+            npm run build
+        fi
+
+        # 使用 serve 或 http-server 服务静态文件
+        pm2 delete sheerid-frontend 2>/dev/null || true
+        if command -v serve &> /dev/null; then
+            pm2 start serve --name sheerid-frontend -- -s dist -l $FRONTEND_PORT
+        else
+            # 安装 serve
+            npm install -g serve --silent
+            pm2 start serve --name sheerid-frontend -- -s dist -l $FRONTEND_PORT
+        fi
+        pm2 save --force 2>/dev/null
+        echo -e "${GREEN}✓ 前端服务已启动 (PM2: sheerid-frontend)${NC}"
+        echo -e "  ${BLUE}http://localhost:$FRONTEND_PORT${NC}"
+        return 0
+    fi
+
+    # 开发环境使用 nohup + vite dev
+    echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
     nohup npm run dev -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
 
     local pid=$!
@@ -272,6 +385,12 @@ start_frontend() {
 start() {
     echo -e "${CYAN}═══════════════════ 启动服务 ═══════════════════${NC}"
     echo ""
+
+    # 生产环境自动安装 PM2
+    if $IS_PRODUCTION && ! $HAS_PM2; then
+        install_pm2
+    fi
+
     start_backend
     start_frontend
     echo ""
@@ -280,6 +399,12 @@ start() {
     echo -e "  ${CYAN}后端 API:${NC}  http://localhost:$BACKEND_PORT"
     echo -e "  ${CYAN}前端页面:${NC}  http://localhost:$FRONTEND_PORT"
     echo -e "  ${CYAN}管理后台:${NC}  http://localhost:$FRONTEND_PORT/admin"
+
+    if $IS_PRODUCTION && $HAS_PM2; then
+        echo ""
+        echo -e "  ${PURPLE}提示: 使用 'pm2 startup' 配置开机自启${NC}"
+    fi
+
     echo ""
     echo -e "${CYAN}═════════════════════════════════════════════════${NC}"
 }

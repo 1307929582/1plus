@@ -23,6 +23,8 @@ from job_manager import (
     format_sse_event,
     format_sse_message,
 )
+from database import SessionLocal
+from models import VerificationHistory
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,34 @@ class CompleteVerificationRequest(BaseModel):
 _rate_limits: dict = {}  # ip -> {count, reset_time}
 RATE_LIMIT_PER_MINUTE = 5
 RATE_LIMIT_PER_HOUR = 20
+
+
+def record_verification_history(
+    veteran: VeteranData,
+    email: str,
+    success: bool,
+    error_message: Optional[str] = None
+):
+    """记录验证历史到数据库"""
+    try:
+        db = SessionLocal()
+        history = VerificationHistory(
+            first_name=veteran.first_name,
+            last_name=veteran.last_name,
+            birth_date=veteran.birth_date,
+            discharge_date=veteran.discharge_date,
+            org_id=veteran.org_id,
+            org_name=veteran.org_name,
+            email=email,
+            success=success,
+            error_message=error_message,
+        )
+        db.add(history)
+        db.commit()
+        db.close()
+        logger.info(f"Recorded verification history: {veteran.first_name} - {'success' if success else 'failed'}")
+    except Exception as e:
+        logger.error(f"Failed to record verification history: {e}")
 
 
 def check_rate_limit(client_ip: str) -> bool:
@@ -112,10 +142,20 @@ async def run_verification_step1(job_id: str, url: str, email: str, fingerprint:
             return
 
         veteran_name = f"{veteran.first_name} {veteran.last_name[0]}."
+        # 保存 veteran 数据到 job，用于后续记录历史
+        veteran_data = {
+            "first_name": veteran.first_name,
+            "last_name": veteran.last_name,
+            "birth_date": veteran.birth_date,
+            "discharge_date": veteran.discharge_date,
+            "org_id": veteran.org_id,
+            "org_name": veteran.org_name,
+        }
         manager.update_job(
             job_id,
             status=JobStatus.SUBMITTING_STEP1,
             veteran_name=veteran_name,
+            veteran_data=veteran_data,
             message="正在提交验证..."
         )
 
@@ -138,7 +178,7 @@ async def run_verification_step1(job_id: str, url: str, email: str, fingerprint:
                     message="验证邮件已发送，请查收邮箱"
                 )
             elif result.step == "success":
-                repo.mark_used(veteran.id, True)
+                record_verification_history(veteran, email, True)
                 manager.update_job(
                     job_id,
                     status=JobStatus.SUCCESS,
@@ -153,7 +193,7 @@ async def run_verification_step1(job_id: str, url: str, email: str, fingerprint:
                     message=result.message or f"状态: {result.step}"
                 )
         else:
-            repo.mark_used(veteran.id, False)
+            record_verification_history(veteran, email, False, result.error)
             manager.update_job(
                 job_id,
                 status=JobStatus.FAILED,
@@ -288,6 +328,19 @@ async def complete_verification(
     )
 
     if result.success and result.step == "success":
+        # 记录成功历史
+        if job.veteran_data:
+            veteran = VeteranData(
+                id=0,
+                first_name=job.veteran_data.get("first_name", ""),
+                last_name=job.veteran_data.get("last_name", ""),
+                birth_date=job.veteran_data.get("birth_date", ""),
+                discharge_date=job.veteran_data.get("discharge_date", ""),
+                org_id=job.veteran_data.get("org_id", 0),
+                org_name=job.veteran_data.get("org_name", ""),
+            )
+            record_verification_history(veteran, job.email, True)
+
         manager.update_job(
             job.id,
             status=JobStatus.SUCCESS,
@@ -298,6 +351,19 @@ async def complete_verification(
             "message": "验证成功！",
         }
     else:
+        # 记录失败历史
+        if job.veteran_data:
+            veteran = VeteranData(
+                id=0,
+                first_name=job.veteran_data.get("first_name", ""),
+                last_name=job.veteran_data.get("last_name", ""),
+                birth_date=job.veteran_data.get("birth_date", ""),
+                discharge_date=job.veteran_data.get("discharge_date", ""),
+                org_id=job.veteran_data.get("org_id", 0),
+                org_name=job.veteran_data.get("org_name", ""),
+            )
+            record_verification_history(veteran, job.email, False, result.error or "验证失败")
+
         manager.update_job(
             job.id,
             status=JobStatus.FAILED,
