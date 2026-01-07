@@ -421,7 +421,7 @@ def startup():
         logger.info("Database initialized successfully")
 
         veteran_mode = os.getenv("VETERAN_DATA_MODE", "mock")
-        sheerid_mode = os.getenv("SHEERID_MODE", "mock")
+        sheerid_mode = os.getenv("SHEERID_MODE", "real")
 
         from database import SessionLocal
         configure_services(
