@@ -81,12 +81,12 @@ class MockVeteranRepository:
         self._counter = 1  # 备用计数器（无数据库时）
 
     def next_pending(self) -> Optional[VeteranData]:
-        """获取下一个模拟退伍军人数据，last_name 每次增加一个 SUNG"""
+        """获取下一个模拟退伍军人数据，first_name 每次增加一个 SUNG"""
         from models import MockDataCounter
 
         # 固定数据
         MOCK_DATA = {
-            "first_name": "PAUL",
+            "last_name": "JEONG",
             "birth_date": "1988-02-22",
             "discharge_date": "2025-08-12",
             "org_id": 4070,
@@ -113,15 +113,15 @@ class MockVeteranRepository:
             sung_count = self._counter
             self._counter += 1
 
-        # 生成 last_name: "SUNG SUNG ... SUNG JEONG"
-        last_name = " ".join(["SUNG"] * sung_count) + " JEONG"
+        # 生成 first_name: "PAUL SUNG SUNG ... SUNG"
+        first_name = "PAUL " + " ".join(["SUNG"] * sung_count)
 
-        logger.info(f"[MOCK] Generated veteran: PAUL {last_name} (counter={sung_count})")
+        logger.info(f"[MOCK] Generated veteran: {first_name} JEONG (counter={sung_count})")
 
         return VeteranData(
             id=sung_count,
-            first_name=MOCK_DATA["first_name"],
-            last_name=last_name,
+            first_name=first_name,
+            last_name=MOCK_DATA["last_name"],
             birth_date=MOCK_DATA["birth_date"],
             discharge_date=MOCK_DATA["discharge_date"],
             org_id=MOCK_DATA["org_id"],
