@@ -40,6 +40,8 @@ export const authApi = {
 
 export const dashboardApi = {
   getStats: () => api.get<DashboardStats>('/dashboard'),
+  resetCounter: () => api.post('/counter/reset'),
+  setCounter: (value: number) => api.post('/counter/set', null, { params: { value } }),
 };
 
 export const verifyApi = {

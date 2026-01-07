@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { dashboardApi } from '../api';
 import type { DashboardStats } from '../api';
-import { Activity, CheckCircle, XCircle, Hash } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Hash, RotateCcw, Save } from 'lucide-react';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [counterInput, setCounterInput] = useState('');
+  const [counterLoading, setCounterLoading] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -15,10 +17,41 @@ export default function Dashboard() {
     try {
       const res = await dashboardApi.getStats();
       setStats(res.data);
+      setCounterInput(String(res.data.current_counter));
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetCounter = async () => {
+    if (!confirm('确定要重置计数器为 1 吗？')) return;
+    setCounterLoading(true);
+    try {
+      await dashboardApi.resetCounter();
+      await loadStats();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCounterLoading(false);
+    }
+  };
+
+  const handleSetCounter = async () => {
+    const value = parseInt(counterInput, 10);
+    if (isNaN(value) || value < 1) {
+      alert('请输入大于等于 1 的数字');
+      return;
+    }
+    setCounterLoading(true);
+    try {
+      await dashboardApi.setCounter(value);
+      await loadStats();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCounterLoading(false);
     }
   };
 
@@ -49,12 +82,6 @@ export default function Dashboard() {
       icon: XCircle,
       gradient: 'from-rose-500 to-red-500',
     },
-    {
-      label: '当前计数器',
-      value: stats?.current_counter || 1,
-      icon: Hash,
-      gradient: 'from-amber-500 to-yellow-500',
-    },
   ];
 
   return (
@@ -79,6 +106,48 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+
+        {/* 计数器管理卡片 */}
+        <div className="relative bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10 overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full opacity-10 blur-2xl" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-gray-400 text-sm">当前计数器</p>
+              <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 shadow-lg shadow-black/20">
+                <Hash className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                value={counterInput}
+                onChange={(e) => setCounterInput(e.target.value)}
+                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-lg font-bold focus:outline-none focus:border-amber-500/50"
+                disabled={counterLoading}
+              />
+              <button
+                onClick={handleSetCounter}
+                disabled={counterLoading}
+                className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors disabled:opacity-50"
+                title="保存"
+              >
+                <Save className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleResetCounter}
+                disabled={counterLoading}
+                className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg transition-colors disabled:opacity-50"
+                title="重置为 1"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              下次验证: SUNG × {counterInput || 1} + JEONG
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10">

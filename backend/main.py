@@ -190,6 +190,21 @@ def reset_counter(admin: Admin = Depends(verify_admin), db: Session = Depends(ge
     return {"message": "计数器已重置", "counter": 1}
 
 
+@app.post("/api/counter/set")
+def set_counter(value: int, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """设置计数器值"""
+    if value < 1:
+        raise HTTPException(status_code=400, detail="计数器值必须大于等于 1")
+    counter = db.query(MockDataCounter).first()
+    if not counter:
+        counter = MockDataCounter(counter=value)
+        db.add(counter)
+    else:
+        counter.counter = value
+    db.commit()
+    return {"message": f"计数器已设置为 {value}", "counter": value}
+
+
 @app.get("/api/counter")
 def get_counter(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
     """获取当前计数器值"""
