@@ -55,7 +55,7 @@ const initialState: VerificationState = {
   message: null,
   error: null,
   logs: [],
-  testMode: true,
+  testMode: false,
 };
 
 function reducer(state: VerificationState, action: Action): VerificationState {
