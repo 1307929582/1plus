@@ -1,8 +1,6 @@
 """
 验证服务抽象层 - 支持 Mock 和真实模式
 """
-import csv
-import os
 import random
 import uuid
 import asyncio
@@ -76,77 +74,62 @@ class SheerIDClient(Protocol):
 # ==================== Mock 实现 ====================
 
 class MockVeteranRepository:
-    """Mock 退伍军人数据仓库 - 从 CSV 轮询"""
+    """Mock 退伍军人数据仓库 - 使用数据库计数器生成递增的 last_name"""
 
-    def __init__(self, csv_path: str = "veterans_diverse.csv"):
-        self.veterans: List[VeteranData] = []
-        self.index = 0
-        self._load_csv(csv_path)
-
-    def _load_csv(self, csv_path: str):
-        """加载 CSV 数据"""
-        if not os.path.exists(csv_path):
-            # 使用默认测试数据
-            self.veterans = [
-                VeteranData(
-                    id=1,
-                    first_name="John",
-                    last_name="Smith",
-                    birth_date="1985-03-15",
-                    discharge_date="2015-06-30",
-                    org_id=4070,
-                    org_name="Army"
-                ),
-                VeteranData(
-                    id=2,
-                    first_name="Michael",
-                    last_name="Johnson",
-                    birth_date="1990-07-22",
-                    discharge_date="2020-12-15",
-                    org_id=4073,
-                    org_name="Air Force"
-                ),
-                VeteranData(
-                    id=3,
-                    first_name="David",
-                    last_name="Williams",
-                    birth_date="1988-11-08",
-                    discharge_date="2018-04-20",
-                    org_id=4075,
-                    org_name="Navy"
-                ),
-            ]
-            logger.info(f"Using default test veterans ({len(self.veterans)} records)")
-            return
-
-        try:
-            with open(csv_path, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for i, row in enumerate(reader):
-                    self.veterans.append(VeteranData(
-                        id=i + 1,
-                        first_name=row.get("first_name", "Test"),
-                        last_name=row.get("last_name", "User"),
-                        birth_date=row.get("birth_date", "1990-01-01"),
-                        discharge_date=row.get("discharge_date", "2020-01-01"),
-                        org_id=int(row.get("org_id", 4070)),
-                        org_name=row.get("org_name", "Army"),
-                    ))
-            logger.info(f"Loaded {len(self.veterans)} veterans from {csv_path}")
-        except Exception as e:
-            logger.error(f"Failed to load CSV: {e}")
-            self.veterans = []
+    def __init__(self, db_session_factory=None):
+        self.db_session_factory = db_session_factory
+        self._counter = 1  # 备用计数器（无数据库时）
 
     def next_pending(self) -> Optional[VeteranData]:
-        """轮询获取下一个退伍军人"""
-        if not self.veterans:
-            return None
-        veteran = self.veterans[self.index % len(self.veterans)]
-        self.index += 1
-        return veteran
+        """获取下一个模拟退伍军人数据，last_name 每次增加一个 SUNG"""
+        from models import MockDataCounter
+
+        # 固定数据
+        MOCK_DATA = {
+            "first_name": "PAUL",
+            "birth_date": "1988-02-22",
+            "discharge_date": "2025-08-12",
+            "org_id": 4070,
+            "org_name": "Army",
+        }
+
+        # 获取并递增计数器
+        if self.db_session_factory:
+            db = self.db_session_factory()
+            try:
+                counter = db.query(MockDataCounter).first()
+                if not counter:
+                    counter = MockDataCounter(counter=1)
+                    db.add(counter)
+                    db.commit()
+                    db.refresh(counter)
+
+                sung_count = counter.counter
+                counter.counter += 1
+                db.commit()
+            finally:
+                db.close()
+        else:
+            sung_count = self._counter
+            self._counter += 1
+
+        # 生成 last_name: "SUNG SUNG ... SUNG JEONG"
+        last_name = " ".join(["SUNG"] * sung_count) + " JEONG"
+
+        logger.info(f"[MOCK] Generated veteran: PAUL {last_name} (counter={sung_count})")
+
+        return VeteranData(
+            id=sung_count,
+            first_name=MOCK_DATA["first_name"],
+            last_name=last_name,
+            birth_date=MOCK_DATA["birth_date"],
+            discharge_date=MOCK_DATA["discharge_date"],
+            org_id=MOCK_DATA["org_id"],
+            org_name=MOCK_DATA["org_name"],
+        )
 
     def mark_used(self, veteran_id: int, success: bool) -> None:
-        """Mock 实现 - 不做任何操作"""
+        """记录验证结果到历史表"""
         logger.info(f"[MOCK] Marked veteran {veteran_id} as {'success' if success else 'failed'}")
 
 
@@ -359,7 +342,7 @@ def configure_services(
 def get_veteran_repository() -> VeteranRepository:
     """获取退伍军人仓库实例"""
     if _veteran_mode == ServiceMode.MOCK:
-        return MockVeteranRepository()
+        return MockVeteranRepository(db_session_factory=_db_session_factory)
     else:
         if not _db_session_factory:
             raise RuntimeError("Database session factory not configured")
