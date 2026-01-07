@@ -268,6 +268,14 @@ async def complete_verification(
     if not job.verification_id or not job.fingerprint:
         raise HTTPException(status_code=400, detail="任务数据不完整")
 
+    # 从输入中提取 token（支持完整 URL 或纯数字）
+    from sheerid_service import extract_token_from_url
+    email_token = data.email_token.strip()
+    extracted = extract_token_from_url(email_token)
+    if extracted:
+        email_token = extracted
+        logger.info(f"Extracted token from URL: {email_token}")
+
     # 更新状态
     manager.update_job(job.id, status=JobStatus.SUBMITTING_STEP2, message="正在验证 token...")
 
@@ -275,7 +283,7 @@ async def complete_verification(
     client = get_sheerid_client()
     result = await client.complete_verification(
         job.verification_id,
-        data.email_token,
+        email_token,
         job.fingerprint,
     )
 
