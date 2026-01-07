@@ -67,9 +67,18 @@ export const verifyApi = {
     api.post('/verify/record-result', { veteran_id, code_id, success, email, token }),
 };
 
-export const logsApi = {
-  list: (skip = 0, limit = 100) =>
-    api.get('/logs', { params: { skip, limit } }),
+export interface VerificationLog {
+  id: number;
+  email: string;
+  client_ip: string;
+  success: boolean;
+  error_message: string | null;
+  created_at: string;
+}
+
+export const historyApi = {
+  list: (skip = 0, limit = 50) =>
+    api.get<{ history: VerificationLog[]; total: number }>('/history', { params: { skip, limit } }),
 };
 
 export const proxyApi = {

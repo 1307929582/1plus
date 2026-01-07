@@ -158,6 +158,7 @@ def record_verification_history(
     org_name: str,
     email: str,
     success: bool,
+    client_ip: Optional[str] = None,
     error_message: Optional[str] = None
 ):
     """记录验证历史"""
@@ -171,13 +172,14 @@ def record_verification_history(
             org_id=org_id,
             org_name=org_name,
             email=email,
+            client_ip=client_ip,
             success=success,
             error_message=error_message,
         )
         db.add(history)
         db.commit()
         db.close()
-        logger.info(f"Recorded: {first_name} {last_name} - {'success' if success else 'failed'}")
+        logger.info(f"Recorded: {email} from {client_ip} - {'success' if success else 'failed'}")
     except Exception as e:
         logger.error(f"Failed to record history: {e}")
 
@@ -246,6 +248,8 @@ async def report_verification_result(request: Request, data: ReportResultRequest
     上报验证结果
     前端完成 SheerID 验证后调用此接口记录结果
     """
+    client_ip = request.client.host if request.client else "unknown"
+
     # 验证 token（防止伪造）
     veteran_data = {
         "first_name": data.first_name,
@@ -266,6 +270,7 @@ async def report_verification_result(request: Request, data: ReportResultRequest
         org_name=data.org_name,
         email=data.email,
         success=data.success,
+        client_ip=client_ip,
         error_message=data.error_message,
     )
 

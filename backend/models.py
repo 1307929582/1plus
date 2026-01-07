@@ -32,6 +32,7 @@ class VerificationHistory(Base):
     org_id = Column(Integer, nullable=False)
     org_name = Column(String(100), nullable=False)
     email = Column(String(200), nullable=True)
+    client_ip = Column(String(50), nullable=True)  # 客户端 IP
     success = Column(Boolean, default=False)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

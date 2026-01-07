@@ -1,17 +1,33 @@
 import { useState, useEffect } from 'react';
-import { dashboardApi } from '../api';
-import type { DashboardStats } from '../api';
-import { Activity, CheckCircle, XCircle, Hash, RotateCcw, Save } from 'lucide-react';
+import { dashboardApi, historyApi } from '../api';
+import type { DashboardStats, VerificationLog } from '../api';
+import { Activity, CheckCircle, XCircle, Hash, RotateCcw, Save, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [counterInput, setCounterInput] = useState('');
   const [counterLoading, setCounterLoading] = useState(false);
+  const [logs, setLogs] = useState<VerificationLog[]>([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsPage, setLogsPage] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     loadStats();
+    loadLogs(0);
   }, []);
+
+  const loadLogs = async (page: number) => {
+    try {
+      const res = await historyApi.list(page * pageSize, pageSize);
+      setLogs(res.data.history);
+      setLogsTotal(res.data.total);
+      setLogsPage(page);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -201,6 +217,79 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* 验证日志表格 */}
+      <div className="mt-8 bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Clock className="w-5 h-5 text-fuchsia-400" />
+            验证日志
+          </h2>
+          <span className="text-sm text-gray-400">共 {logsTotal} 条</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-400 border-b border-white/10">
+                <th className="text-left py-3 px-2">邮箱</th>
+                <th className="text-left py-3 px-2">IP 地址</th>
+                <th className="text-left py-3 px-2">状态</th>
+                <th className="text-left py-3 px-2">时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-3 px-2 text-white">{log.email || '-'}</td>
+                  <td className="py-3 px-2 text-gray-400 font-mono text-xs">{log.client_ip || '-'}</td>
+                  <td className="py-3 px-2">
+                    {log.success ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400">
+                        <CheckCircle className="w-4 h-4" /> 成功
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-red-400" title={log.error_message || ''}>
+                        <XCircle className="w-4 h-4" /> 失败
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-2 text-gray-400 text-xs">
+                    {log.created_at ? new Date(log.created_at).toLocaleString('zh-CN') : '-'}
+                  </td>
+                </tr>
+              ))}
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-gray-500">暂无验证记录</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {logsTotal > pageSize && (
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+            <span className="text-sm text-gray-400">
+              第 {logsPage + 1} / {Math.ceil(logsTotal / pageSize)} 页
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => loadLogs(logsPage - 1)}
+                disabled={logsPage === 0}
+                className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => loadLogs(logsPage + 1)}
+                disabled={(logsPage + 1) * pageSize >= logsTotal}
+                className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

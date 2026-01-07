@@ -177,7 +177,20 @@ def get_history(
     """获取验证历史"""
     history = db.query(VerificationHistory).order_by(VerificationHistory.id.desc()).offset(skip).limit(limit).all()
     total = db.query(VerificationHistory).count()
-    return {"history": history, "total": total}
+
+    # 格式化返回数据
+    items = []
+    for h in history:
+        items.append({
+            "id": h.id,
+            "email": h.email,
+            "client_ip": h.client_ip,
+            "success": h.success,
+            "error_message": h.error_message,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+        })
+
+    return {"history": items, "total": total}
 
 
 @app.post("/api/counter/reset")
