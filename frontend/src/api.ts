@@ -23,6 +23,17 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && window.location.pathname.startsWith('/admin')) {
+      localStorage.removeItem('auth');
+      window.location.href = '/admin';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface DashboardStats {
   total_verifications: number;
   success_count: number;
