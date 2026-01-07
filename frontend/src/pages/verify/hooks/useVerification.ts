@@ -206,23 +206,21 @@ export function useVerification() {
       const veteran: VeteranData = veteranData.veteran;
       const backendToken: string = veteranData.token;  // 后端签名 token
       dispatch({ type: 'VETERAN_RECEIVED', payload: { veteran, token: backendToken } });
-      addLog(`获取到: ${veteran.first_name} ${veteran.last_name[0]}.`, 'success');
+      addLog('已获取验证数据', 'success');
 
       // 2. 提取 verificationId
       const verificationId = extractVerificationId(url);
       if (!verificationId) {
         throw new Error('无法从 URL 提取 verificationId');
       }
-      addLog(`验证 ID: ${verificationId.slice(0, 8)}...`, 'info');
 
       // 3. 获取指纹
       dispatch({ type: 'START_STEP1', payload: { email } });
-      addLog('正在获取设备指纹...', 'info');
+      addLog('正在准备验证...', 'info');
       const fingerprint = await getUdid();
-      addLog(`指纹: ${fingerprint.slice(0, 8)}...`, 'info');
 
       // 4. 调用 SheerID Step 1: collectMilitaryStatus
-      addLog('提交军人状态...', 'info');
+      addLog('提交验证请求...', 'info');
       const step1Resp = await fetch(
         `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectMilitaryStatus`,
         {
@@ -241,7 +239,7 @@ export function useVerification() {
       }
 
       // 5. 调用 SheerID Step 2: collectInactiveMilitaryPersonalInfo
-      addLog('提交个人信息...', 'info');
+      addLog('正在验证身份...', 'info');
       const step2Resp = await fetch(
         `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectInactiveMilitaryPersonalInfo`,
         {
@@ -305,7 +303,7 @@ export function useVerification() {
 
     dispatch({ type: 'START_STEP2' });
     const emailToken = extractEmailToken(emailTokenInput);
-    addLog(`提交验证码: ${emailToken}`, 'info');
+    addLog('正在验证邮件码...', 'info');
 
     try {
       const resp = await fetch(
