@@ -280,10 +280,6 @@ async def complete_verification(
     )
 
     if result.success and result.step == "success":
-        # 标记 veteran 为已使用
-        repo = get_veteran_repository()
-        if job.veteran_id:
-            repo.mark_used(job.veteran_id, True)
         manager.update_job(
             job.id,
             status=JobStatus.SUCCESS,
@@ -294,10 +290,6 @@ async def complete_verification(
             "message": "验证成功！",
         }
     else:
-        # 标记 veteran 为失败
-        repo = get_veteran_repository()
-        if job.veteran_id:
-            repo.mark_used(job.veteran_id, False)
         manager.update_job(
             job.id,
             status=JobStatus.FAILED,
