@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { proxyApi, captchaApi } from '../api';
-import { Save, Eye, EyeOff, Globe, Wifi, WifiOff, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { proxyApi, captchaApi, siteSettingsApi } from '../api';
+import type { SiteSettingsAdmin } from '../api';
+import { Save, Eye, EyeOff, Globe, Wifi, WifiOff, CheckCircle, XCircle, Shield, Megaphone, LayoutTemplate } from 'lucide-react';
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
@@ -29,18 +30,30 @@ export default function Settings() {
   const [showTurnstileSecret, setShowTurnstileSecret] = useState(false);
   const [showHcaptchaSecret, setShowHcaptchaSecret] = useState(false);
 
+  const [siteSettings, setSiteSettings] = useState<SiteSettingsAdmin>({
+    notice_enabled: false,
+    notice_content: '',
+    left_ad_enabled: false,
+    left_ad_content: '',
+    right_ad_enabled: false,
+    right_ad_content: '',
+  });
+  const [savingSite, setSavingSite] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
     try {
-      const [proxyRes, captchaRes] = await Promise.all([
+      const [proxyRes, captchaRes, siteRes] = await Promise.all([
         proxyApi.getSettings(),
         captchaApi.getSettings(),
+        siteSettingsApi.getAdmin(),
       ]);
       setProxySettings(proxyRes.data);
       setCaptchaSettings(captchaRes.data);
+      setSiteSettings(siteRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -82,6 +95,18 @@ export default function Settings() {
       alert(err.response?.data?.detail || '保存失败');
     } finally {
       setSavingCaptcha(false);
+    }
+  };
+
+  const handleSaveSite = async () => {
+    setSavingSite(true);
+    try {
+      await siteSettingsApi.updateAdmin(siteSettings);
+      alert('站点设置已保存');
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '保存失败');
+    } finally {
+      setSavingSite(false);
     }
   };
 
@@ -353,6 +378,108 @@ export default function Settings() {
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-500" />
                 <Save className="w-4 h-4 relative" />
                 <span className="relative">{savingCaptcha ? '保存中...' : '保存 Captcha 设置'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Site Settings (Notice & Ads) */}
+        <div className="bg-[#12121a]/80 backdrop-blur-md rounded-2xl border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-500">
+              <LayoutTemplate className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-white">公告与广告</h2>
+          </div>
+
+          <div className="space-y-6 max-w-2xl">
+            {/* Notice Bar */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                <div className="flex items-center gap-2 text-fuchsia-400">
+                  <Megaphone className="w-4 h-4" />
+                  <span className="font-medium">顶部公告栏</span>
+                </div>
+                <button
+                  onClick={() => setSiteSettings({ ...siteSettings, notice_enabled: !siteSettings.notice_enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${siteSettings.notice_enabled ? 'bg-fuchsia-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${siteSettings.notice_enabled ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">公告内容 (支持 Markdown)</label>
+                <textarea
+                  value={siteSettings.notice_content}
+                  onChange={(e) => setSiteSettings({ ...siteSettings, notice_content: e.target.value })}
+                  placeholder="输入公告内容..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-fuchsia-500/50 focus:bg-white/10 transition-all duration-300 resize-none font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Left Ad */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                <div className="flex items-center gap-2 text-cyan-400">
+                  <LayoutTemplate className="w-4 h-4" />
+                  <span className="font-medium">左侧广告栏</span>
+                </div>
+                <button
+                  onClick={() => setSiteSettings({ ...siteSettings, left_ad_enabled: !siteSettings.left_ad_enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${siteSettings.left_ad_enabled ? 'bg-cyan-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${siteSettings.left_ad_enabled ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">左侧内容 (支持 Markdown)</label>
+                <textarea
+                  value={siteSettings.left_ad_content}
+                  onChange={(e) => setSiteSettings({ ...siteSettings, left_ad_content: e.target.value })}
+                  placeholder="输入左侧广告内容..."
+                  rows={4}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all duration-300 resize-none font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Right Ad */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                <div className="flex items-center gap-2 text-violet-400">
+                  <LayoutTemplate className="w-4 h-4" />
+                  <span className="font-medium">右侧广告栏</span>
+                </div>
+                <button
+                  onClick={() => setSiteSettings({ ...siteSettings, right_ad_enabled: !siteSettings.right_ad_enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${siteSettings.right_ad_enabled ? 'bg-violet-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${siteSettings.right_ad_enabled ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">右侧内容 (支持 Markdown)</label>
+                <textarea
+                  value={siteSettings.right_ad_content}
+                  onChange={(e) => setSiteSettings({ ...siteSettings, right_ad_content: e.target.value })}
+                  placeholder="输入右侧广告内容..."
+                  rows={4}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300 resize-none font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={handleSaveSite}
+                disabled={savingSite}
+                className="relative flex items-center gap-2 px-6 py-3 text-white font-medium rounded-xl overflow-hidden group disabled:opacity-50"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-600 to-pink-500" />
+                <Save className="w-4 h-4 relative" />
+                <span className="relative">{savingSite ? '保存中...' : '保存公告与广告设置'}</span>
               </button>
             </div>
           </div>

@@ -110,4 +110,25 @@ export const captchaApi = {
   }>('/public/captcha/config'),
 };
 
+export interface SiteSettingsAdmin {
+  notice_enabled: boolean;
+  notice_content: string;
+  left_ad_enabled: boolean;
+  left_ad_content: string;
+  right_ad_enabled: boolean;
+  right_ad_content: string;
+}
+
+export interface SiteSettingsPublic {
+  notice: { enabled: boolean; content: string };
+  left_ad: { enabled: boolean; content: string };
+  right_ad: { enabled: boolean; content: string };
+}
+
+export const siteSettingsApi = {
+  getAdmin: () => api.get<SiteSettingsAdmin>('/admin/site/settings'),
+  updateAdmin: (data: Partial<SiteSettingsAdmin>) => api.put('/admin/site/settings', data),
+  getPublic: () => api.get<SiteSettingsPublic>('/public/site/settings'),
+};
+
 export default api;

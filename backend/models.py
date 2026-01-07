@@ -72,3 +72,18 @@ class CaptchaSettings(Base):
     is_enabled = Column(Boolean, default=False)
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SiteSettings(Base):
+    """站点公告与广告配置"""
+    __tablename__ = "site_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    notice_enabled = Column(Boolean, default=False)
+    notice_content = Column(Text, nullable=True)
+    left_ad_enabled = Column(Boolean, default=False)
+    left_ad_content = Column(Text, nullable=True)
+    right_ad_enabled = Column(Boolean, default=False)
+    right_ad_content = Column(Text, nullable=True)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db, init_db
-from models import Admin, MockDataCounter, VerificationHistory, ProxySettings, CaptchaSettings
+from models import Admin, MockDataCounter, VerificationHistory, ProxySettings, CaptchaSettings, SiteSettings
 from proxy_config import get_proxy_status
 from public_api import router as public_router
 from verification_services import configure_services
@@ -100,6 +100,15 @@ class CaptchaSettingsUpdate(BaseModel):
     hcaptcha_site_key: Optional[str] = None
     hcaptcha_secret: Optional[str] = None
     is_enabled: Optional[bool] = None
+
+
+class SiteSettingsUpdate(BaseModel):
+    notice_enabled: Optional[bool] = None
+    notice_content: Optional[str] = None
+    left_ad_enabled: Optional[bool] = None
+    left_ad_content: Optional[str] = None
+    right_ad_enabled: Optional[bool] = None
+    right_ad_content: Optional[str] = None
 
 
 # ==================== Auth ====================
@@ -413,6 +422,66 @@ def get_captcha_public_config(db: Session = Depends(get_db)):
         "enabled": True,
         "turnstile_site_key": settings.turnstile_site_key or "",
         "hcaptcha_site_key": settings.hcaptcha_site_key or "",
+    }
+
+
+# ==================== Site Settings (Admin) ====================
+
+@app.get("/api/admin/site/settings")
+def get_site_settings(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    settings = db.query(SiteSettings).first()
+    if not settings:
+        settings = SiteSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return {
+        "notice_enabled": settings.notice_enabled,
+        "notice_content": settings.notice_content or "",
+        "left_ad_enabled": settings.left_ad_enabled,
+        "left_ad_content": settings.left_ad_content or "",
+        "right_ad_enabled": settings.right_ad_enabled,
+        "right_ad_content": settings.right_ad_content or "",
+    }
+
+
+@app.put("/api/admin/site/settings")
+def update_site_settings(data: SiteSettingsUpdate, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    settings = db.query(SiteSettings).first()
+    if not settings:
+        settings = SiteSettings()
+        db.add(settings)
+
+    if data.notice_enabled is not None:
+        settings.notice_enabled = data.notice_enabled
+    if data.notice_content is not None:
+        settings.notice_content = data.notice_content
+    if data.left_ad_enabled is not None:
+        settings.left_ad_enabled = data.left_ad_enabled
+    if data.left_ad_content is not None:
+        settings.left_ad_content = data.left_ad_content
+    if data.right_ad_enabled is not None:
+        settings.right_ad_enabled = data.right_ad_enabled
+    if data.right_ad_content is not None:
+        settings.right_ad_content = data.right_ad_content
+
+    db.commit()
+    return {"message": "站点设置已更新"}
+
+
+@app.get("/api/public/site/settings")
+def get_public_site_settings(db: Session = Depends(get_db)):
+    settings = db.query(SiteSettings).first()
+    if not settings:
+        return {
+            "notice": {"enabled": False, "content": ""},
+            "left_ad": {"enabled": False, "content": ""},
+            "right_ad": {"enabled": False, "content": ""},
+        }
+    return {
+        "notice": {"enabled": settings.notice_enabled, "content": settings.notice_content or ""},
+        "left_ad": {"enabled": settings.left_ad_enabled, "content": settings.left_ad_content or ""},
+        "right_ad": {"enabled": settings.right_ad_enabled, "content": settings.right_ad_content or ""},
     }
 
 
