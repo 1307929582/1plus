@@ -5,7 +5,6 @@ import type { LogEntry } from '../hooks/useVerification';
 interface StatusPanelProps {
   logs: LogEntry[];
   status: string;
-  veteranName: string | null;
   message: string | null;
   error: string | null;
 }
@@ -30,7 +29,6 @@ const logTypeConfig = {
 export default function StatusPanel({
   logs,
   status,
-  veteranName,
   message,
   error,
 }: StatusPanelProps) {
@@ -55,11 +53,6 @@ export default function StatusPanel({
               {status === 'success' && '验证成功'}
               {status === 'failed' && '验证失败'}
             </p>
-            {veteranName && (
-              <p className="text-sm text-gray-400 mt-0.5">
-                验证对象: {veteranName}
-              </p>
-            )}
             {message && status !== 'failed' && (
               <p className="text-sm text-gray-400 mt-0.5">{message}</p>
             )}

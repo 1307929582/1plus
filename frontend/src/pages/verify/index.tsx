@@ -73,7 +73,6 @@ export default function Verify() {
             <StatusPanel
               logs={state.logs}
               status={state.status}
-              veteranName={state.veteran ? `${state.veteran.first_name} ${state.veteran.last_name[0]}.` : null}
               message={state.message}
               error={state.error}
             />
