@@ -50,19 +50,39 @@ mkdir -p "$PID_DIR" "$LOG_DIR"
 # 安装 PM2（生产环境自动安装）
 install_pm2() {
     if $HAS_PM2; then
+        echo -e "${GREEN}PM2 已安装${NC}"
         return 0
     fi
 
     echo -e "${YELLOW}检测到生产环境，正在安装 PM2...${NC}"
-    npm install -g pm2 --silent
-    if command -v pm2 &> /dev/null; then
-        HAS_PM2=true
-        echo -e "${GREEN}✓ PM2 安装成功${NC}"
-        return 0
-    else
-        echo -e "${RED}✗ PM2 安装失败，将使用 nohup 模式${NC}"
-        return 1
+
+    # 尝试全局安装
+    if npm install -g pm2 2>&1; then
+        # 刷新 PATH 并重新检测
+        hash -r 2>/dev/null || true
+        if command -v pm2 &> /dev/null; then
+            HAS_PM2=true
+            echo -e "${GREEN}✓ PM2 安装成功${NC}"
+            pm2 --version
+            return 0
+        fi
     fi
+
+    # 如果全局安装失败，尝试用 sudo
+    echo -e "${YELLOW}尝试使用 sudo 安装...${NC}"
+    if sudo npm install -g pm2 2>&1; then
+        hash -r 2>/dev/null || true
+        if command -v pm2 &> /dev/null; then
+            HAS_PM2=true
+            echo -e "${GREEN}✓ PM2 安装成功 (sudo)${NC}"
+            pm2 --version
+            return 0
+        fi
+    fi
+
+    echo -e "${RED}✗ PM2 安装失败，将使用 nohup 模式${NC}"
+    echo -e "${YELLOW}请手动运行: sudo npm install -g pm2${NC}"
+    return 1
 }
 
 show_logo() {
@@ -265,6 +285,7 @@ stop_frontend() {
 
 start_backend() {
     echo -e "${BLUE}启动后端服务...${NC}"
+    echo -e "  IS_PRODUCTION=$IS_PRODUCTION, HAS_PM2=$HAS_PM2"
 
     # 确保端口空闲
     kill_port $BACKEND_PORT
@@ -301,7 +322,7 @@ start_backend() {
         return 0
     fi
 
-    # 开发环境使用 nohup
+    echo -e "${YELLOW}使用 nohup 模式启动后端...${NC}"
     echo "=== Backend starting at $(date) ===" > "$LOG_DIR/backend.log"
     nohup "$PYTHON_BIN" -u -m uvicorn main:app \
         --host 0.0.0.0 \
@@ -328,6 +349,7 @@ start_backend() {
 
 start_frontend() {
     echo -e "${BLUE}启动前端服务...${NC}"
+    echo -e "  IS_PRODUCTION=$IS_PRODUCTION, HAS_PM2=$HAS_PM2"
 
     # 确保端口空闲
     kill_port $FRONTEND_PORT
@@ -364,6 +386,7 @@ start_frontend() {
     fi
 
     # 开发环境使用 nohup + vite dev
+    echo -e "${YELLOW}使用 nohup 模式启动前端...${NC}"
     echo "=== Frontend starting at $(date) ===" > "$LOG_DIR/frontend.log"
     nohup npm run dev -- --port $FRONTEND_PORT --host 0.0.0.0 >> "$LOG_DIR/frontend.log" 2>&1 &
 
