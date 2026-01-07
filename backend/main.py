@@ -160,7 +160,7 @@ def admin_login(data: AdminLogin, db: Session = Depends(get_db)):
 @app.get("/api/dashboard", response_model=DashboardStats)
 def get_dashboard(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
     counter = db.query(MockDataCounter).first()
-    current_counter = counter.counter if counter else 1
+    current_counter = int(counter.counter) if counter and counter.counter else 1
 
     total = db.query(VerificationHistory).count()
     success = db.query(VerificationHistory).filter(VerificationHistory.success == True).count()
