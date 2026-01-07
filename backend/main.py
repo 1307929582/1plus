@@ -152,9 +152,11 @@ async def import_veterans(
     admin: Admin = Depends(verify_admin),
     db: Session = Depends(get_db)
 ):
-    """从 CSV 导入退伍军人数据（分批处理）"""
+    """从 CSV 导入退伍军人数据（分批处理，支持大文件）"""
     import re
     from datetime import datetime as dt
+    import tempfile
+    import os
 
     def normalize_date(date_str: str) -> str:
         date_str = date_str.strip()
@@ -176,51 +178,63 @@ async def import_veterans(
                 return f"{y}-{int(m):02d}-{int(d):02d}"
         return date_str
 
-    BATCH_SIZE = 500
-    content = await file.read()
-    decoded = content.decode("utf-8")
-    reader = csv.DictReader(io.StringIO(decoded))
+    # 保存到临时文件，避免内存问题
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.csv') as temp_file:
+            temp_path = temp_file.name
+            # 分块读取上传文件
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                temp_file.write(chunk)
 
-    count = 0
-    skipped = 0
-    batch = []
+        BATCH_SIZE = 500
+        count = 0
+        skipped = 0
+        batch = []
 
-    for row in reader:
-        first_name = row.get("first_name", "").strip()
-        last_name = row.get("last_name", "").strip()
-        birth_date = normalize_date(row.get("birth_date", ""))
-        discharge_date = normalize_date(row.get("discharge_date", ""))
+        # 从临时文件读取
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                first_name = row.get("first_name", "").strip()
+                last_name = row.get("last_name", "").strip()
+                birth_date = normalize_date(row.get("birth_date", ""))
+                discharge_date = normalize_date(row.get("discharge_date", ""))
 
-        if not first_name or not last_name or not birth_date or not discharge_date:
-            skipped += 1
-            continue
+                if not first_name or not last_name or not birth_date or not discharge_date:
+                    skipped += 1
+                    continue
 
-        org_id_val = row.get("org_id", "").strip()
-        org_name_val = row.get("org_name", "").strip()
-        veteran = Veteran(
-            first_name=first_name,
-            last_name=last_name,
-            birth_date=birth_date,
-            discharge_date=discharge_date,
-            org_id=int(org_id_val) if org_id_val else 4070,
-            org_name=org_name_val if org_name_val else "Army",
-        )
-        batch.append(veteran)
-        count += 1
+                org_id_val = row.get("org_id", "").strip()
+                org_name_val = row.get("org_name", "").strip()
+                veteran = Veteran(
+                    first_name=first_name,
+                    last_name=last_name,
+                    birth_date=birth_date,
+                    discharge_date=discharge_date,
+                    org_id=int(org_id_val) if org_id_val else 4070,
+                    org_name=org_name_val if org_name_val else "Army",
+                )
+                batch.append(veteran)
+                count += 1
 
-        if len(batch) >= BATCH_SIZE:
+                if len(batch) >= BATCH_SIZE:
+                    db.bulk_save_objects(batch)
+                    db.commit()
+                    batch = []
+
+        if batch:
             db.bulk_save_objects(batch)
             db.commit()
-            batch = []
 
-    if batch:
-        db.bulk_save_objects(batch)
-        db.commit()
+        msg = f"成功导入 {count} 条记录"
+        if skipped > 0:
+            msg += f"，跳过 {skipped} 条空行"
+        return {"message": msg}
 
-    msg = f"成功导入 {count} 条记录"
-    if skipped > 0:
-        msg += f"，跳过 {skipped} 条空行"
-    return {"message": msg}
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 
 @app.delete("/api/veterans/{veteran_id}")
