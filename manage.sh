@@ -532,6 +532,10 @@ redeploy() {
 
     # 启动
     echo -e "${BLUE}4. 启动服务...${NC}"
+    # 生产环境自动安装 PM2
+    if $IS_PRODUCTION && ! $HAS_PM2; then
+        install_pm2
+    fi
     start_backend
     start_frontend
 
@@ -583,6 +587,10 @@ update() {
 
     # 启动服务
     echo -e "${BLUE}5. 启动服务...${NC}"
+    # 生产环境自动安装 PM2
+    if $IS_PRODUCTION && ! $HAS_PM2; then
+        install_pm2
+    fi
     start_backend
     start_frontend
 
