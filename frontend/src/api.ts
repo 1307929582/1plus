@@ -24,23 +24,10 @@ api.interceptors.request.use((config) => {
 });
 
 export interface DashboardStats {
-  total_veterans: number;
-  pending_veterans: number;
-  verified_veterans: number;
-  failed_veterans: number;
-}
-
-export interface Veteran {
-  id: number;
-  first_name: string;
-  last_name: string;
-  birth_date: string;
-  discharge_date: string;
-  org_name: string;
-  status: string;
-  email_used?: string;
-  verified_at?: string;
-  error_message?: string;
+  total_verifications: number;
+  success_count: number;
+  failed_count: number;
+  current_counter: number;
 }
 
 export const authApi = {
@@ -53,18 +40,6 @@ export const authApi = {
 
 export const dashboardApi = {
   getStats: () => api.get<DashboardStats>('/dashboard'),
-};
-
-export const veteransApi = {
-  list: (skip = 0, limit = 50, status?: string) =>
-    api.get('/veterans', { params: { skip, limit, status } }),
-  import: (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return api.post('/veterans/import', formData);
-  },
-  delete: (id: number) => api.delete(`/veterans/${id}`),
-  deleteBatch: (ids: number[]) => api.post('/veterans/delete-batch', ids),
 };
 
 export const verifyApi = {

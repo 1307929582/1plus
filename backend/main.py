@@ -1,26 +1,23 @@
 """
-FastAPI 主应用
+FastAPI 主应用 - 简化版（使用模拟数据）
 """
-import csv
-import io
-import secrets
 import hashlib
 from datetime import datetime
-from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from typing import Optional
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db, init_db
-from models import Base, Veteran, Admin, VerificationStatus, ProxySettings, CaptchaSettings
+from models import Admin, MockDataCounter, VerificationHistory, ProxySettings, CaptchaSettings
 from proxy_config import get_proxy_status
 from public_api import router as public_router
 from verification_services import configure_services
 from job_manager import get_job_manager
 
-app = FastAPI(title="SheerID Veteran Verification API", version="2.0.0")
+app = FastAPI(title="SheerID Veteran Verification API", version="3.0.0")
 
 app.include_router(public_router)
 
@@ -33,6 +30,40 @@ app.add_middleware(
 )
 
 security = HTTPBasic()
+
+
+# ==================== 模拟数据配置 ====================
+
+MOCK_VETERAN_DATA = {
+    "first_name": "PAUL",
+    "birth_date": "1988-02-22",
+    "discharge_date": "2025-08-12",
+    "org_id": 4070,
+    "org_name": "Army",
+}
+
+
+def get_mock_veteran_data(db: Session) -> dict:
+    """获取模拟退伍军人数据，每次调用 last_name 增加一个 SUNG"""
+    counter = db.query(MockDataCounter).first()
+    if not counter:
+        counter = MockDataCounter(counter=1)
+        db.add(counter)
+        db.commit()
+        db.refresh(counter)
+
+    # 生成 last_name: "SUNG SUNG ... SUNG JEONG"
+    sung_count = counter.counter
+    last_name = " ".join(["SUNG"] * sung_count) + " JEONG"
+
+    # 增加计数器
+    counter.counter += 1
+    db.commit()
+
+    return {
+        **MOCK_VETERAN_DATA,
+        "last_name": last_name,
+    }
 
 
 # ==================== Pydantic Models ====================
@@ -48,10 +79,10 @@ class AdminCreate(BaseModel):
 
 
 class DashboardStats(BaseModel):
-    total_veterans: int
-    pending_veterans: int
-    verified_veterans: int
-    failed_veterans: int
+    total_verifications: int
+    success_count: int
+    failed_count: int
+    current_counter: int
 
 
 class ProxySettingsUpdate(BaseModel):
@@ -119,139 +150,90 @@ def admin_login(data: AdminLogin, db: Session = Depends(get_db)):
 
 @app.get("/api/dashboard", response_model=DashboardStats)
 def get_dashboard(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
-    stats = DashboardStats(
-        total_veterans=db.query(Veteran).count(),
-        pending_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.PENDING).count(),
-        verified_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.SUCCESS).count(),
-        failed_veterans=db.query(Veteran).filter(Veteran.status == VerificationStatus.FAILED).count(),
+    counter = db.query(MockDataCounter).first()
+    current_counter = counter.counter if counter else 1
+
+    total = db.query(VerificationHistory).count()
+    success = db.query(VerificationHistory).filter(VerificationHistory.success == True).count()
+    failed = db.query(VerificationHistory).filter(VerificationHistory.success == False).count()
+
+    return DashboardStats(
+        total_verifications=total,
+        success_count=success,
+        failed_count=failed,
+        current_counter=current_counter,
     )
-    return stats
 
 
-# ==================== Veterans ====================
+# ==================== 验证历史 ====================
 
-@app.get("/api/veterans")
-def list_veterans(
+@app.get("/api/history")
+def get_history(
     skip: int = 0,
     limit: int = 50,
-    status: Optional[str] = None,
     admin: Admin = Depends(verify_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Veteran)
-    if status:
-        query = query.filter(Veteran.status == VerificationStatus(status))
-    veterans = query.order_by(Veteran.id).offset(skip).limit(limit).all()
-    total = query.count()
-    return {"veterans": veterans, "total": total}
+    """获取验证历史"""
+    history = db.query(VerificationHistory).order_by(VerificationHistory.id.desc()).offset(skip).limit(limit).all()
+    total = db.query(VerificationHistory).count()
+    return {"history": history, "total": total}
 
 
-@app.post("/api/veterans/import")
-async def import_veterans(
-    file: UploadFile = File(...),
-    admin: Admin = Depends(verify_admin),
+@app.post("/api/counter/reset")
+def reset_counter(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """重置计数器"""
+    counter = db.query(MockDataCounter).first()
+    if counter:
+        counter.counter = 1
+        db.commit()
+    return {"message": "计数器已重置", "counter": 1}
+
+
+@app.get("/api/counter")
+def get_counter(admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
+    """获取当前计数器值"""
+    counter = db.query(MockDataCounter).first()
+    return {"counter": counter.counter if counter else 1}
+
+
+# ==================== 获取模拟数据（供前端验证使用） ====================
+
+@app.get("/api/mock-veteran")
+def get_mock_veteran(db: Session = Depends(get_db)):
+    """获取下一个模拟退伍军人数据"""
+    data = get_mock_veteran_data(db)
+    return {"success": True, "veteran": data}
+
+
+@app.post("/api/record-verification")
+def record_verification(
+    first_name: str,
+    last_name: str,
+    birth_date: str,
+    discharge_date: str,
+    org_id: int,
+    org_name: str,
+    email: str,
+    success: bool,
+    error_message: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """从 CSV 导入退伍军人数据（分批处理，支持大文件）"""
-    import re
-    from datetime import datetime as dt
-    import tempfile
-    import os
-
-    def normalize_date(date_str: str) -> str:
-        date_str = date_str.strip()
-        if not date_str:
-            return ""
-        formats = [
-            "%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%d-%m-%Y",
-        ]
-        for fmt in formats:
-            try:
-                parsed = dt.strptime(date_str, fmt)
-                return parsed.strftime("%Y-%m-%d")
-            except ValueError:
-                continue
-        nums = re.findall(r'\d+', date_str)
-        if len(nums) == 3:
-            y, m, d = nums[0], nums[1], nums[2]
-            if len(y) == 4:
-                return f"{y}-{int(m):02d}-{int(d):02d}"
-        return date_str
-
-    # 保存到临时文件，避免内存问题
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.csv') as temp_file:
-            temp_path = temp_file.name
-            # 分块读取上传文件
-            while chunk := await file.read(1024 * 1024):  # 1MB chunks
-                temp_file.write(chunk)
-
-        BATCH_SIZE = 500
-        count = 0
-        skipped = 0
-        batch = []
-
-        # 从临时文件读取
-        with open(temp_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                first_name = row.get("first_name", "").strip()
-                last_name = row.get("last_name", "").strip()
-                birth_date = normalize_date(row.get("birth_date", ""))
-                discharge_date = normalize_date(row.get("discharge_date", ""))
-
-                if not first_name or not last_name or not birth_date or not discharge_date:
-                    skipped += 1
-                    continue
-
-                org_id_val = row.get("org_id", "").strip()
-                org_name_val = row.get("org_name", "").strip()
-                veteran = Veteran(
-                    first_name=first_name,
-                    last_name=last_name,
-                    birth_date=birth_date,
-                    discharge_date=discharge_date,
-                    org_id=int(org_id_val) if org_id_val else 4070,
-                    org_name=org_name_val if org_name_val else "Army",
-                )
-                batch.append(veteran)
-                count += 1
-
-                if len(batch) >= BATCH_SIZE:
-                    db.bulk_save_objects(batch)
-                    db.commit()
-                    batch = []
-
-        if batch:
-            db.bulk_save_objects(batch)
-            db.commit()
-
-        msg = f"成功导入 {count} 条记录"
-        if skipped > 0:
-            msg += f"，跳过 {skipped} 条空行"
-        return {"message": msg}
-
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            os.unlink(temp_path)
-
-
-@app.delete("/api/veterans/{veteran_id}")
-def delete_veteran(veteran_id: int, admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
-    veteran = db.query(Veteran).filter(Veteran.id == veteran_id).first()
-    if not veteran:
-        raise HTTPException(status_code=404, detail="Veteran not found")
-    db.delete(veteran)
+    """记录验证结果"""
+    history = VerificationHistory(
+        first_name=first_name,
+        last_name=last_name,
+        birth_date=birth_date,
+        discharge_date=discharge_date,
+        org_id=org_id,
+        org_name=org_name,
+        email=email,
+        success=success,
+        error_message=error_message,
+    )
+    db.add(history)
     db.commit()
-    return {"message": "Deleted"}
-
-
-@app.post("/api/veterans/delete-batch")
-def delete_veterans_batch(ids: List[int], admin: Admin = Depends(verify_admin), db: Session = Depends(get_db)):
-    deleted = db.query(Veteran).filter(Veteran.id.in_(ids)).delete(synchronize_session=False)
-    db.commit()
-    return {"message": f"已删除 {deleted} 条记录"}
+    return {"success": True}
 
 
 # ==================== Proxy Settings (Admin) ====================

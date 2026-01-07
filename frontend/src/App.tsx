@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Veterans from './pages/Veterans';
 import Verify from './pages/verify';
 import Settings from './pages/Settings';
 import Layout from './components/Layout';
@@ -34,7 +33,6 @@ function App() {
           isAuth ? <Layout onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
         }>
           <Route index element={<Dashboard />} />
-          <Route path="veterans" element={<Veterans />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />

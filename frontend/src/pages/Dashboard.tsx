@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { dashboardApi } from '../api';
 import type { DashboardStats } from '../api';
-import { Users, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Hash } from 'lucide-react';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -32,28 +32,28 @@ export default function Dashboard() {
 
   const statCards = [
     {
-      label: '总退伍军人',
-      value: stats?.total_veterans || 0,
-      icon: Users,
+      label: '总验证次数',
+      value: stats?.total_verifications || 0,
+      icon: Activity,
       gradient: 'from-cyan-500 to-blue-500',
     },
     {
-      label: '待验证',
-      value: stats?.pending_veterans || 0,
-      icon: Clock,
-      gradient: 'from-amber-500 to-yellow-500',
-    },
-    {
-      label: '已验证',
-      value: stats?.verified_veterans || 0,
+      label: '验证成功',
+      value: stats?.success_count || 0,
       icon: CheckCircle,
       gradient: 'from-emerald-500 to-green-500',
     },
     {
       label: '验证失败',
-      value: stats?.failed_veterans || 0,
+      value: stats?.failed_count || 0,
       icon: XCircle,
       gradient: 'from-rose-500 to-red-500',
+    },
+    {
+      label: '当前计数器',
+      value: stats?.current_counter || 1,
+      icon: Hash,
+      gradient: 'from-amber-500 to-yellow-500',
     },
   ];
 
@@ -82,22 +82,18 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-8 bg-[#12121a]/80 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-        <h2 className="text-lg font-semibold text-white mb-4">验证进度</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">验证成功率</h2>
         <div className="relative pt-1">
           <div className="flex mb-2 items-center justify-between text-sm">
             <div>
               <span className="text-xs font-semibold inline-block text-fuchsia-400">
-                完成率
+                成功率
               </span>
             </div>
             <div className="text-right">
               <span className="text-xs font-semibold inline-block text-fuchsia-400">
-                {stats?.total_veterans && (stats.verified_veterans + stats.failed_veterans) > 0
-                  ? Math.round(
-                      ((stats.verified_veterans + stats.failed_veterans) /
-                        stats.total_veterans) *
-                        100
-                    )
+                {stats?.total_verifications && stats.total_verifications > 0
+                  ? Math.round((stats.success_count / stats.total_verifications) * 100)
                   : 0}
                 %
               </span>
@@ -107,8 +103,8 @@ export default function Dashboard() {
             <div
               style={{
                 width: `${
-                  stats?.total_veterans
-                    ? (stats.verified_veterans / stats.total_veterans) * 100
+                  stats?.total_verifications
+                    ? (stats.success_count / stats.total_verifications) * 100
                     : 0
                 }%`,
               }}
@@ -117,8 +113,8 @@ export default function Dashboard() {
             <div
               style={{
                 width: `${
-                  stats?.total_veterans
-                    ? (stats.failed_veterans / stats.total_veterans) * 100
+                  stats?.total_verifications
+                    ? (stats.failed_count / stats.total_verifications) * 100
                     : 0
                 }%`,
               }}
@@ -128,15 +124,11 @@ export default function Dashboard() {
           <div className="flex justify-between mt-3 text-xs text-gray-400">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              成功: {stats?.verified_veterans || 0}
+              成功: {stats?.success_count || 0}
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-              失败: {stats?.failed_veterans || 0}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              待处理: {stats?.pending_veterans || 0}
+              失败: {stats?.failed_count || 0}
             </span>
           </div>
         </div>
