@@ -1,9 +1,12 @@
 """
 公开验证 API - 前端直接调用 SheerID，后端只提供数据和记录结果
 """
+import hmac
+import hashlib
 import logging
+import secrets
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
@@ -16,6 +19,77 @@ from models import VerificationHistory
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+
+# 签名密钥（启动时生成）
+_SIGNING_KEY = secrets.token_hex(32)
+
+# 已使用的 token（防重放）
+_used_tokens: dict = {}  # token -> expire_time
+TOKEN_EXPIRE_MINUTES = 30
+
+
+def _generate_token(veteran_data: dict) -> str:
+    """生成带签名的 token"""
+    # 数据序列化
+    data_str = f"{veteran_data['first_name']}|{veteran_data['last_name']}|{veteran_data['birth_date']}|{veteran_data['org_id']}"
+    # 时间戳
+    timestamp = int(datetime.utcnow().timestamp())
+    # 随机数
+    nonce = secrets.token_hex(8)
+    # 签名
+    message = f"{data_str}|{timestamp}|{nonce}"
+    signature = hmac.new(_SIGNING_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{timestamp}:{nonce}:{signature}"
+
+
+def _verify_token(token: str, veteran_data: dict) -> bool:
+    """验证 token"""
+    try:
+        parts = token.split(":")
+        if len(parts) != 3:
+            return False
+
+        timestamp, nonce, signature = parts
+        timestamp = int(timestamp)
+
+        # 检查过期
+        now = int(datetime.utcnow().timestamp())
+        if now - timestamp > TOKEN_EXPIRE_MINUTES * 60:
+            logger.warning(f"Token expired: {now - timestamp}s old")
+            return False
+
+        # 检查重放
+        if token in _used_tokens:
+            logger.warning("Token already used (replay attack)")
+            return False
+
+        # 验证签名
+        data_str = f"{veteran_data['first_name']}|{veteran_data['last_name']}|{veteran_data['birth_date']}|{veteran_data['org_id']}"
+        message = f"{data_str}|{timestamp}|{nonce}"
+        expected = hmac.new(_SIGNING_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()[:16]
+
+        if not hmac.compare_digest(signature, expected):
+            logger.warning("Token signature mismatch")
+            return False
+
+        # 标记为已使用
+        _used_tokens[token] = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+
+        # 清理过期 token
+        _cleanup_used_tokens()
+
+        return True
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        return False
+
+
+def _cleanup_used_tokens():
+    """清理过期的已使用 token"""
+    now = datetime.utcnow()
+    expired = [t for t, exp in _used_tokens.items() if exp < now]
+    for t in expired:
+        del _used_tokens[t]
 
 
 # ==================== Request Models ====================
@@ -36,9 +110,8 @@ class ReportResultRequest(BaseModel):
     org_name: str
     email: str
     success: bool
+    token: str  # 必须携带从 /veteran/next 获取的 token
     error_message: Optional[str] = None
-    turnstile_token: Optional[str] = None
-    hcaptcha_token: Optional[str] = None
 
 
 # ==================== Rate Limiting ====================
@@ -148,16 +221,22 @@ async def get_next_veteran(request: Request, data: GetVeteranRequest):
     if not veteran:
         raise HTTPException(status_code=404, detail="没有可用的验证数据")
 
+    veteran_data = {
+        "first_name": veteran.first_name,
+        "last_name": veteran.last_name,
+        "birth_date": veteran.birth_date,
+        "discharge_date": veteran.discharge_date,
+        "org_id": veteran.org_id,
+        "org_name": veteran.org_name,
+    }
+
+    # 生成签名 token
+    token = _generate_token(veteran_data)
+
     return {
         "success": True,
-        "veteran": {
-            "first_name": veteran.first_name,
-            "last_name": veteran.last_name,
-            "birth_date": veteran.birth_date,
-            "discharge_date": veteran.discharge_date,
-            "org_id": veteran.org_id,
-            "org_name": veteran.org_name,
-        }
+        "veteran": veteran_data,
+        "token": token,  # 前端必须在 report 时带上此 token
     }
 
 
@@ -167,16 +246,15 @@ async def report_verification_result(request: Request, data: ReportResultRequest
     上报验证结果
     前端完成 SheerID 验证后调用此接口记录结果
     """
-    client_ip = request.client.host if request.client else "unknown"
-
-    # 可选的 Captcha 验证
-    if data.turnstile_token or data.hcaptcha_token:
-        await verify_captchas(
-            turnstile_token=data.turnstile_token,
-            hcaptcha_token=data.hcaptcha_token,
-            remote_ip=client_ip,
-            require_both=False,
-        )
+    # 验证 token（防止伪造）
+    veteran_data = {
+        "first_name": data.first_name,
+        "last_name": data.last_name,
+        "birth_date": data.birth_date,
+        "org_id": data.org_id,
+    }
+    if not _verify_token(data.token, veteran_data):
+        raise HTTPException(status_code=403, detail="无效或过期的 token")
 
     # 记录历史
     record_verification_history(

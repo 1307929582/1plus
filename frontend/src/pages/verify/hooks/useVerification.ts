@@ -39,6 +39,7 @@ export interface VeteranData {
 export interface VerificationState {
   status: VerificationStatus;
   veteran: VeteranData | null;
+  token: string | null;  // 后端签名 token
   verificationId: string | null;
   fingerprint: string | null;
   email: string | null;
@@ -49,7 +50,7 @@ export interface VerificationState {
 
 type Action =
   | { type: 'START_GET_VETERAN' }
-  | { type: 'VETERAN_RECEIVED'; payload: VeteranData }
+  | { type: 'VETERAN_RECEIVED'; payload: { veteran: VeteranData; token: string } }
   | { type: 'START_STEP1'; payload: { email: string } }
   | { type: 'STEP1_SUCCESS'; payload: { verificationId: string; fingerprint: string } }
   | { type: 'START_STEP2' }
@@ -61,6 +62,7 @@ type Action =
 const initialState: VerificationState = {
   status: 'idle',
   veteran: null,
+  token: null,
   verificationId: null,
   fingerprint: null,
   email: null,
@@ -74,7 +76,7 @@ function reducer(state: VerificationState, action: Action): VerificationState {
     case 'START_GET_VETERAN':
       return { ...state, status: 'getting_veteran', error: null };
     case 'VETERAN_RECEIVED':
-      return { ...state, veteran: action.payload };
+      return { ...state, veteran: action.payload.veteran, token: action.payload.token };
     case 'START_STEP1':
       return { ...state, status: 'submitting_step1', email: action.payload.email };
     case 'STEP1_SUCCESS':
@@ -157,13 +159,14 @@ export function useVerification() {
   }, []);
 
   // 上报结果到后端
-  const reportResult = useCallback(async (veteran: VeteranData, email: string, success: boolean, errorMsg?: string) => {
+  const reportResult = useCallback(async (veteran: VeteranData, token: string, email: string, success: boolean, errorMsg?: string) => {
     try {
       await fetch(`${getApiBase()}/public/verify/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...veteran,
+          token,  // 必须携带签名 token
           email,
           success,
           error_message: errorMsg,
@@ -201,7 +204,8 @@ export function useVerification() {
       }
 
       const veteran: VeteranData = veteranData.veteran;
-      dispatch({ type: 'VETERAN_RECEIVED', payload: veteran });
+      const backendToken: string = veteranData.token;  // 后端签名 token
+      dispatch({ type: 'VETERAN_RECEIVED', payload: { veteran, token: backendToken } });
       addLog(`获取到: ${veteran.first_name} ${veteran.last_name[0]}.`, 'success');
 
       // 2. 提取 verificationId
@@ -271,7 +275,7 @@ export function useVerification() {
       } else if (currentStep === 'success') {
         dispatch({ type: 'SUCCESS', payload: { message: '验证成功！' } });
         addLog('验证成功！', 'success');
-        await reportResult(veteran, email, true);
+        await reportResult(veteran, backendToken, email, true);
       } else if (currentStep === 'error') {
         const errMsg = result.systemErrorMessage || '验证失败';
         throw new Error(errMsg);
@@ -284,17 +288,17 @@ export function useVerification() {
     } catch (err: any) {
       addLog(`错误: ${err.message}`, 'error');
       dispatch({ type: 'FAILED', payload: { error: err.message } });
-      if (state.veteran && state.email) {
-        await reportResult(state.veteran, state.email, false, err.message);
+      if (state.veteran && state.token && state.email) {
+        await reportResult(state.veteran, state.token, state.email, false, err.message);
       }
     }
-  }, [addLog, reportResult, state.veteran, state.email]);
+  }, [addLog, reportResult, state.veteran, state.token, state.email]);
 
   // 完成验证（提交邮件 token）
   const completeVerification = useCallback(async (
     emailTokenInput: string,
   ) => {
-    if (!state.verificationId || !state.fingerprint || !state.veteran || !state.email) {
+    if (!state.verificationId || !state.fingerprint || !state.veteran || !state.token || !state.email) {
       addLog('错误: 缺少必要数据', 'error');
       return;
     }
@@ -325,7 +329,7 @@ export function useVerification() {
       if (currentStep === 'success') {
         dispatch({ type: 'SUCCESS', payload: { message: '验证成功！' } });
         addLog('验证成功！', 'success');
-        await reportResult(state.veteran, state.email, true);
+        await reportResult(state.veteran, state.token, state.email, true);
       } else if (currentStep === 'error') {
         const errorIds = result.errorIds || [];
         let errMsg = '验证失败';
@@ -342,9 +346,9 @@ export function useVerification() {
     } catch (err: any) {
       addLog(`错误: ${err.message}`, 'error');
       dispatch({ type: 'FAILED', payload: { error: err.message } });
-      await reportResult(state.veteran, state.email, false, err.message);
+      await reportResult(state.veteran, state.token, state.email, false, err.message);
     }
-  }, [state.verificationId, state.fingerprint, state.veteran, state.email, addLog, reportResult]);
+  }, [state.verificationId, state.fingerprint, state.veteran, state.token, state.email, addLog, reportResult]);
 
   const reset = useCallback(() => {
     dispatch({ type: 'RESET' });
