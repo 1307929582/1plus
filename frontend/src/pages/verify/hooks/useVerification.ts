@@ -33,11 +33,9 @@ export interface VerificationState {
   message: string | null;
   error: string | null;
   logs: LogEntry[];
-  testMode: boolean;
 }
 
 type Action =
-  | { type: 'SET_TEST_MODE'; payload: boolean }
   | { type: 'START_SUBMIT' }
   | { type: 'CAPTCHA_VERIFIED' }
   | { type: 'JOB_CREATED'; payload: { jobId: string } }
@@ -55,14 +53,10 @@ const initialState: VerificationState = {
   message: null,
   error: null,
   logs: [],
-  testMode: false,
 };
 
 function reducer(state: VerificationState, action: Action): VerificationState {
   switch (action.type) {
-    case 'SET_TEST_MODE':
-      return { ...state, testMode: action.payload };
-
     case 'START_SUBMIT':
       return { ...state, status: 'submitting', error: null, message: null };
 
@@ -100,7 +94,7 @@ function reducer(state: VerificationState, action: Action): VerificationState {
       return { ...state, logs: [action.payload, ...state.logs].slice(0, 50) };
 
     case 'RESET':
-      return { ...initialState, testMode: state.testMode, logs: state.logs };
+      return { ...initialState, logs: state.logs };
 
     default:
       return state;
@@ -295,12 +289,6 @@ export function useVerification() {
     addLog('已重置', 'info');
   }, [closeEventSource, addLog]);
 
-  // 设置测试模式
-  const setTestMode = useCallback((enabled: boolean) => {
-    dispatch({ type: 'SET_TEST_MODE', payload: enabled });
-    addLog(`测试模式: ${enabled ? '开启' : '关闭'}`, 'info');
-  }, [addLog]);
-
   // 清理
   useEffect(() => {
     return () => {
@@ -313,7 +301,6 @@ export function useVerification() {
     submitVerification,
     completeVerification,
     reset,
-    setTestMode,
     addLog,
   };
 }

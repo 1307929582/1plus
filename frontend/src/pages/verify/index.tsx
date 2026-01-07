@@ -12,7 +12,6 @@ export default function Verify() {
     submitVerification,
     completeVerification,
     reset,
-    setTestMode,
   } = useVerification();
 
   return (
@@ -44,8 +43,6 @@ export default function Verify() {
             <div className="relative h-full bg-[#12121a]/90 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl overflow-hidden">
               <InputPanel
                 status={state.status}
-                testMode={state.testMode}
-                onTestModeChange={setTestMode}
                 onSubmit={submitVerification}
                 onComplete={completeVerification}
                 onReset={reset}
@@ -73,7 +70,7 @@ export default function Verify() {
       {/* Footer */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
         <p className="text-gray-600 text-xs">
-          {state.testMode ? '🧪 测试模式' : '🔒 生产模式'} · SheerID Veteran Verification Tool
+          SheerID Veteran Verification Tool
         </p>
       </div>
     </div>

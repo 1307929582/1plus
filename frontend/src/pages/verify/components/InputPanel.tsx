@@ -1,11 +1,9 @@
 import { useState, useCallback } from 'react';
-import { Loader, Send, Mail, ArrowLeft, Sparkles, Beaker, Zap } from 'lucide-react';
+import { Loader, Send, Mail, ArrowLeft, Sparkles, Zap } from 'lucide-react';
 import CaptchaGuard from './CaptchaGuard';
 
 interface InputPanelProps {
   status: string;
-  testMode: boolean;
-  onTestModeChange: (enabled: boolean) => void;
   onSubmit: (
     url: string,
     email: string,
@@ -24,8 +22,6 @@ interface InputPanelProps {
 
 export default function InputPanel({
   status,
-  testMode,
-  onTestModeChange,
   onSubmit,
   onComplete,
   onReset,
@@ -51,7 +47,7 @@ export default function InputPanel({
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url || !email) return;
-    if (!turnstileToken && !hcaptchaToken && !testMode) return;
+    if (!turnstileToken && !hcaptchaToken) return;
     onSubmit(url, email, turnstileToken, hcaptchaToken);
   };
 
@@ -79,27 +75,6 @@ export default function InputPanel({
         </div>
         <h1 className="text-xl font-bold text-white mb-1">身份验证</h1>
         <p className="text-gray-500 text-sm">SheerID Veteran Verification</p>
-      </div>
-
-      {/* Test Mode Toggle */}
-      <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10 mb-4">
-        <div className="flex items-center gap-2">
-          <Beaker className="w-4 h-4 text-amber-400" />
-          <span className="text-sm text-gray-300">测试模式</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => onTestModeChange(!testMode)}
-          className={`relative w-11 h-6 rounded-full transition-colors ${
-            testMode ? 'bg-amber-500' : 'bg-white/10'
-          }`}
-        >
-          <div
-            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-              testMode ? 'left-6' : 'left-1'
-            }`}
-          />
-        </button>
       </div>
 
       {/* Step Indicator */}
@@ -169,7 +144,7 @@ export default function InputPanel({
 
             <button
               type="submit"
-              disabled={isLoading || (!turnstileToken && !hcaptchaToken && !testMode)}
+              disabled={isLoading || (!turnstileToken && !hcaptchaToken)}
               className="relative w-full py-3.5 rounded-xl font-semibold text-white overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600 bg-[length:200%_100%] group-hover:animate-shimmer transition-all" />
