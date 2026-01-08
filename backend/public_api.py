@@ -16,6 +16,7 @@ from captcha_service import verify_captchas
 from verification_services import get_veteran_repository, is_test_mode, VeteranData
 from database import SessionLocal
 from models import VerificationHistory
+from proxy_config import get_proxy_settings, build_proxy_url
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +291,23 @@ async def get_sheerid_url_from_token(data: ChatGPTTokenRequest):
     使用 ChatGPT accessToken 获取 SheerID 验证链接
     """
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        # 获取代理配置
+        proxy_settings = get_proxy_settings()
+        proxy_url = build_proxy_url(proxy_settings) if proxy_settings else None
+
+        # 配置 httpx 客户端
+        client_kwargs = {
+            "timeout": 30.0,
+            "follow_redirects": True,
+        }
+        if proxy_url:
+            client_kwargs["proxies"] = {
+                "http://": proxy_url,
+                "https://": proxy_url,
+            }
+            logger.info(f"Using proxy for ChatGPT API: {proxy_url.split('@')[-1] if '@' in proxy_url else proxy_url}")
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             response = await client.post(
                 "https://chatgpt.com/backend-api/veterans/create_verification",
                 headers={
