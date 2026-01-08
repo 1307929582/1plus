@@ -23,6 +23,7 @@ export default function Verify() {
     notice: { enabled: false, content: '' },
     left_ad: { enabled: false, content: '' },
     right_ad: { enabled: false, content: '' },
+    inline_ad: { enabled: false, content: '' },
   });
   const [showNotice, setShowNotice] = useState(true);
 
@@ -108,6 +109,7 @@ export default function Verify() {
                   onReset={reset}
                   turnstileSiteKey={captchaConfig.turnstileSiteKey}
                   hcaptchaSiteKey={captchaConfig.hcaptchaSiteKey}
+                  inlineAd={siteSettings.inline_ad}
                 />
               </div>
             </div>

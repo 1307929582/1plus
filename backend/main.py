@@ -109,6 +109,8 @@ class SiteSettingsUpdate(BaseModel):
     left_ad_content: Optional[str] = None
     right_ad_enabled: Optional[bool] = None
     right_ad_content: Optional[str] = None
+    inline_ad_enabled: Optional[bool] = None
+    inline_ad_content: Optional[str] = None
 
 
 # ==================== Auth ====================
@@ -442,6 +444,8 @@ def get_site_settings(admin: Admin = Depends(verify_admin), db: Session = Depend
         "left_ad_content": settings.left_ad_content or "",
         "right_ad_enabled": settings.right_ad_enabled,
         "right_ad_content": settings.right_ad_content or "",
+        "inline_ad_enabled": settings.inline_ad_enabled,
+        "inline_ad_content": settings.inline_ad_content or "",
     }
 
 
@@ -464,6 +468,10 @@ def update_site_settings(data: SiteSettingsUpdate, admin: Admin = Depends(verify
         settings.right_ad_enabled = data.right_ad_enabled
     if data.right_ad_content is not None:
         settings.right_ad_content = data.right_ad_content
+    if data.inline_ad_enabled is not None:
+        settings.inline_ad_enabled = data.inline_ad_enabled
+    if data.inline_ad_content is not None:
+        settings.inline_ad_content = data.inline_ad_content
 
     db.commit()
     return {"message": "站点设置已更新"}
@@ -477,11 +485,13 @@ def get_public_site_settings(db: Session = Depends(get_db)):
             "notice": {"enabled": False, "content": ""},
             "left_ad": {"enabled": False, "content": ""},
             "right_ad": {"enabled": False, "content": ""},
+            "inline_ad": {"enabled": False, "content": ""},
         }
     return {
         "notice": {"enabled": settings.notice_enabled, "content": settings.notice_content or ""},
         "left_ad": {"enabled": settings.left_ad_enabled, "content": settings.left_ad_content or ""},
         "right_ad": {"enabled": settings.right_ad_enabled, "content": settings.right_ad_content or ""},
+        "inline_ad": {"enabled": settings.inline_ad_enabled, "content": settings.inline_ad_content or ""},
     }
 
 

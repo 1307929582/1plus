@@ -93,5 +93,7 @@ class SiteSettings(Base):
     left_ad_content = Column(Text, nullable=True)
     right_ad_enabled = Column(Boolean, default=False)
     right_ad_content = Column(Text, nullable=True)
+    inline_ad_enabled = Column(Boolean, default=False)
+    inline_ad_content = Column(Text, nullable=True)
 
     updated_at = Column(DateTime, default=now_utc8, onupdate=now_utc8)

@@ -18,6 +18,7 @@ interface InputPanelProps {
   onReset: () => void;
   turnstileSiteKey?: string;
   hcaptchaSiteKey?: string;
+  inlineAd?: { enabled: boolean; content: string };
 }
 
 export default function InputPanel({
@@ -27,6 +28,7 @@ export default function InputPanel({
   onReset,
   turnstileSiteKey,
   hcaptchaSiteKey,
+  inlineAd,
 }: InputPanelProps) {
   const [url, setUrl] = useState('');
   const [email, setEmail] = useState('');
@@ -161,6 +163,13 @@ export default function InputPanel({
                 )}
               </span>
             </button>
+
+            {inlineAd?.enabled && inlineAd.content && (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 xl:hidden">
+                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">赞助</div>
+                <div className="text-xs text-gray-300 whitespace-pre-wrap">{inlineAd.content}</div>
+              </div>
+            )}
           </form>
         )}
 

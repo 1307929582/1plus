@@ -128,12 +128,15 @@ export interface SiteSettingsAdmin {
   left_ad_content: string;
   right_ad_enabled: boolean;
   right_ad_content: string;
+  inline_ad_enabled: boolean;
+  inline_ad_content: string;
 }
 
 export interface SiteSettingsPublic {
   notice: { enabled: boolean; content: string };
   left_ad: { enabled: boolean; content: string };
   right_ad: { enabled: boolean; content: string };
+  inline_ad: { enabled: boolean; content: string };
 }
 
 export const siteSettingsApi = {

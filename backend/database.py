@@ -61,6 +61,20 @@ def _run_migrations():
             except Exception:
                 pass
 
+        # site_settings migrations
+        result = conn.execute(text("PRAGMA table_info(site_settings)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "inline_ad_enabled" not in columns:
+            try:
+                conn.execute(text("ALTER TABLE site_settings ADD COLUMN inline_ad_enabled BOOLEAN DEFAULT 0"))
+            except Exception:
+                pass
+        if "inline_ad_content" not in columns:
+            try:
+                conn.execute(text("ALTER TABLE site_settings ADD COLUMN inline_ad_content TEXT"))
+            except Exception:
+                pass
+
 
 def get_db():
     db = SessionLocal()

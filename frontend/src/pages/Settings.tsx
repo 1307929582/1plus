@@ -37,6 +37,8 @@ export default function Settings() {
     left_ad_content: '',
     right_ad_enabled: false,
     right_ad_content: '',
+    inline_ad_enabled: false,
+    inline_ad_content: '',
   });
   const [savingSite, setSavingSite] = useState(false);
 
@@ -467,6 +469,32 @@ export default function Settings() {
                   placeholder="输入右侧广告内容..."
                   rows={4}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all duration-300 resize-none font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Inline Ad (Small Screens) */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                <div className="flex items-center gap-2 text-amber-400">
+                  <LayoutTemplate className="w-4 h-4" />
+                  <span className="font-medium">按钮下广告（小屏）</span>
+                </div>
+                <button
+                  onClick={() => setSiteSettings({ ...siteSettings, inline_ad_enabled: !siteSettings.inline_ad_enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${siteSettings.inline_ad_enabled ? 'bg-amber-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${siteSettings.inline_ad_enabled ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">按钮下内容 (支持 Markdown)</label>
+                <textarea
+                  value={siteSettings.inline_ad_content}
+                  onChange={(e) => setSiteSettings({ ...siteSettings, inline_ad_content: e.target.value })}
+                  placeholder="输入按钮下广告内容..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all duration-300 resize-none font-mono text-sm"
                 />
               </div>
             </div>
