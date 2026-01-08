@@ -63,33 +63,36 @@ export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptc
       }
       addLog('Token 解析成功', 'success');
 
-      // 2. 获取 SheerID URL
+      // 2. 获取 SheerID URL（直接从前端调用 ChatGPT）
       addLog('正在获取验证链接...', 'info');
-      const apiBase = window.location.port === '14000'
-        ? `${window.location.protocol}//${window.location.hostname}:14100/api`
-        : '/api';
 
-      const urlResponse = await fetch(`${apiBase}/public/chatgpt/get-sheerid-url`, {
+      const chatgptResponse = await fetch('https://chatgpt.com/backend-api/veterans/create_verification', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: accessToken }),
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ program_id: '690415d58971e73ca187d8c9' }),
       });
 
-      if (!urlResponse.ok) {
-        const errorData = await urlResponse.json();
-        throw new Error(errorData.detail || '获取链接失败');
+      if (!chatgptResponse.ok) {
+        throw new Error(`ChatGPT API 返回错误: ${chatgptResponse.status}`);
       }
 
-      const urlResult = await urlResponse.json();
-      const sheeridUrl = urlResult.sheerid_url;
+      const chatgptResult = await chatgptResponse.json();
+      const sheeridUrl = chatgptResult.url || chatgptResult.verification_url || chatgptResult;
 
-      if (!sheeridUrl) {
-        throw new Error('未返回 SheerID 链接');
+      if (!sheeridUrl || typeof sheeridUrl !== 'string') {
+        throw new Error('未返回有效的 SheerID 链接');
       }
       addLog('验证链接获取成功', 'success');
 
       // 3. 获取 veteran 数据
       addLog('正在获取验证数据...', 'info');
+      const apiBase = window.location.port === '14000'
+        ? `${window.location.protocol}//${window.location.hostname}:14100/api`
+        : '/api';
+
       const veteranResponse = await fetch(`${apiBase}/public/veteran/next`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
