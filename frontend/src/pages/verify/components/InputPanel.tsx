@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Loader, Send, Mail, ArrowLeft, Sparkles, Zap } from 'lucide-react';
+import { Loader, Send, Mail, ArrowLeft, Sparkles, Zap, Link2 } from 'lucide-react';
 import CaptchaGuard from './CaptchaGuard';
+import TokenMode from './TokenMode';
 
 interface InputPanelProps {
   status: string;
@@ -35,6 +36,7 @@ export default function InputPanel({
   const [emailToken, setEmailToken] = useState('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
+  const [mode, setMode] = useState<'manual' | 'token'>('manual');
 
   const isStep1 = status === 'idle' || status === 'getting_veteran' || status === 'submitting_step1';
   const isStep2 = status === 'awaiting_email' || status === 'submitting_step2';
@@ -65,7 +67,13 @@ export default function InputPanel({
     setEmailToken('');
     setTurnstileToken(null);
     setHcaptchaToken(null);
+    setMode('manual');
     onReset();
+  };
+
+  const handleTokenUrlObtained = (sheeridUrl: string) => {
+    setUrl(sheeridUrl);
+    setMode('manual'); // 切换回手动模式继续填写
   };
 
   return (
@@ -78,6 +86,36 @@ export default function InputPanel({
         <h1 className="text-xl font-bold text-white mb-1">身份验证</h1>
         <p className="text-gray-500 text-sm">SheerID Veteran Verification</p>
       </div>
+
+      {/* Mode Switcher */}
+      {isStep1 && (
+        <div className="flex gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setMode('manual')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              mode === 'manual'
+                ? 'bg-violet-500 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <Link2 className="w-4 h-4 inline mr-1" />
+            手动模式
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('token')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              mode === 'token'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <Zap className="w-4 h-4 inline mr-1" />
+            Token 模式
+          </button>
+        </div>
+      )}
 
       {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2 mb-6">
@@ -98,8 +136,13 @@ export default function InputPanel({
 
       {/* Forms */}
       <div className="flex-1 overflow-y-auto">
+        {/* Token Mode */}
+        {isStep1 && mode === 'token' && (
+          <TokenMode onUrlObtained={handleTokenUrlObtained} />
+        )}
+
         {/* Step 1: Submit Verification */}
-        {isStep1 && (
+        {isStep1 && mode === 'manual' && (
           <form onSubmit={handleStep1Submit} className="space-y-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-300">
