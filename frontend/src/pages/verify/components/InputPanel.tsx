@@ -71,19 +71,6 @@ export default function InputPanel({
     onReset();
   };
 
-  const handleTokenUrlObtained = (sheeridUrl: string) => {
-    setUrl(sheeridUrl);
-    setMode('manual'); // 切换回手动模式继续填写
-  };
-
-  const handleTokenSuccess = (message: string) => {
-    // Token 模式验证成功，不需要额外操作
-  };
-
-  const handleTokenError = (error: string) => {
-    // Token 模式验证失败，不需要额外操作
-  };
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -147,8 +134,8 @@ export default function InputPanel({
         {/* Token Mode */}
         {isStep1 && mode === 'token' && (
           <TokenMode
-            onSuccess={handleTokenSuccess}
-            onError={handleTokenError}
+            onSuccess={() => {}}
+            onError={() => {}}
             turnstileSiteKey={turnstileSiteKey}
             hcaptchaSiteKey={hcaptchaSiteKey}
           />

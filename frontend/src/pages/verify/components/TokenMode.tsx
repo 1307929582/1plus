@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Key, Loader, AlertCircle, Mail, CheckCircle, XCircle } from 'lucide-react';
+import { Key, Loader, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import CaptchaGuard from './CaptchaGuard';
 
 interface TokenModeProps {
