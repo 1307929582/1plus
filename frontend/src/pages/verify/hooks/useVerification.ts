@@ -219,7 +219,34 @@ export function useVerification() {
       addLog('正在准备验证...', 'info');
       const fingerprint = await getUdid();
 
-      // 4. 直接调用 SheerID: collectInactiveMilitaryPersonalInfo（跳过 collectMilitaryStatus）
+      // 4. 先提交军人状态
+      addLog('提交军人状态...', 'info');
+      const step1Resp = await fetch(
+        `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectMilitaryStatus`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ status: 'VETERAN' }),
+        }
+      );
+
+      let step1Result: any = null;
+      try {
+        step1Result = await step1Resp.json();
+      } catch {
+        step1Result = null;
+      }
+
+      if (!step1Resp.ok) {
+        const errMsg = step1Result?.systemErrorMessage || step1Result?.message || `提交军人状态失败: ${step1Resp.status}`;
+        throw new Error(errMsg);
+      }
+      addLog('军人状态已提交', 'success');
+
+      // 5. 提交个人信息
       addLog('提交验证请求...', 'info');
       const step2Resp = await fetch(
         `${SHEERID_BASE}/rest/v2/verification/${verificationId}/step/collectInactiveMilitaryPersonalInfo`,
