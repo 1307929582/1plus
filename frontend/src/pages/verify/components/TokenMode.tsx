@@ -28,6 +28,19 @@ export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptc
     setHcaptchaToken(h);
   }, []);
 
+  // 自动提取邮箱
+  const handleTokenChange = (value: string) => {
+    setTokenInput(value);
+    try {
+      const sessionData = JSON.parse(value);
+      if (sessionData.user?.email) {
+        setEmail(sessionData.user.email);
+      }
+    } catch {
+      // 不是有效的 JSON，忽略
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -231,8 +244,8 @@ export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptc
                 <p className="text-xs text-cyan-400/70">
                   1. 登录 ChatGPT<br />
                   2. 访问 <code className="bg-black/20 px-1 rounded">chatgpt.com/api/auth/session</code><br />
-                  3. 复制完整 JSON 并填写邮箱<br />
-                  4. 点击提交，自动完成验证
+                  3. 复制完整 JSON（邮箱自动提取）<br />
+                  4. 完成人机验证，点击提交
                 </p>
               </div>
             </div>
@@ -244,7 +257,7 @@ export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptc
             </label>
             <textarea
               value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
+              onChange={(e) => handleTokenChange(e.target.value)}
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all font-mono text-xs"
               placeholder='{"user":{"id":"..."},"accessToken":"eyJhbGci..."}'
               rows={6}
@@ -255,7 +268,7 @@ export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptc
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-300">
-              接收邮箱
+              接收邮箱 {email && <span className="text-xs text-emerald-400">(已自动提取)</span>}
             </label>
             <input
               type="email"
