@@ -146,7 +146,12 @@ export default function InputPanel({
       <div className="flex-1 overflow-y-auto">
         {/* Token Mode */}
         {isStep1 && mode === 'token' && (
-          <TokenMode onSuccess={handleTokenSuccess} onError={handleTokenError} />
+          <TokenMode
+            onSuccess={handleTokenSuccess}
+            onError={handleTokenError}
+            turnstileSiteKey={turnstileSiteKey}
+            hcaptchaSiteKey={hcaptchaSiteKey}
+          />
         )}
 
         {/* Step 1: Submit Verification */}

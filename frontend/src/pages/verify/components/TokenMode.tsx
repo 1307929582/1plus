@@ -1,22 +1,32 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Key, Loader, AlertCircle, Mail, CheckCircle, XCircle } from 'lucide-react';
+import CaptchaGuard from './CaptchaGuard';
 
 interface TokenModeProps {
   onSuccess: (message: string) => void;
   onError: (error: string) => void;
+  turnstileSiteKey?: string;
+  hcaptchaSiteKey?: string;
 }
 
-export default function TokenMode({ onSuccess, onError }: TokenModeProps) {
+export default function TokenMode({ onSuccess, onError, turnstileSiteKey, hcaptchaSiteKey }: TokenModeProps) {
   const [tokenInput, setTokenInput] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState<'input' | 'processing' | 'complete'>('input');
   const [logs, setLogs] = useState<Array<{ message: string; type: 'info' | 'success' | 'error' }>>([]);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
 
   const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
     setLogs(prev => [...prev, { message, type }]);
   };
+
+  const handleCaptchaVerify = useCallback((t: string | null, h: string | null) => {
+    setTurnstileToken(t);
+    setHcaptchaToken(h);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +81,8 @@ export default function TokenMode({ onSuccess, onError }: TokenModeProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          turnstile_token: null,
-          hcaptcha_token: null,
+          turnstile_token: turnstileToken,
+          hcaptcha_token: hcaptchaToken,
         }),
       });
 
@@ -258,6 +268,18 @@ export default function TokenMode({ onSuccess, onError }: TokenModeProps) {
             />
           </div>
 
+          {/* Captcha */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-300">
+              人机验证
+            </label>
+            <CaptchaGuard
+              onVerify={handleCaptchaVerify}
+              turnstileSiteKey={turnstileSiteKey}
+              hcaptchaSiteKey={hcaptchaSiteKey}
+            />
+          </div>
+
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
@@ -267,7 +289,7 @@ export default function TokenMode({ onSuccess, onError }: TokenModeProps) {
 
           <button
             type="submit"
-            disabled={loading || !tokenInput || !email}
+            disabled={loading || !tokenInput || !email || (!turnstileToken && !hcaptchaToken)}
             className="relative w-full py-3.5 rounded-xl font-semibold text-white overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-cyan-500" />
