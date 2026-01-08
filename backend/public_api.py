@@ -290,13 +290,20 @@ async def get_sheerid_url_from_token(data: ChatGPTTokenRequest):
     使用 ChatGPT accessToken 获取 SheerID 验证链接
     """
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.post(
                 "https://chatgpt.com/backend-api/veterans/create_verification",
                 headers={
                     "Authorization": f"Bearer {data.access_token}",
                     "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                    "Accept": "application/json",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Origin": "https://chatgpt.com",
+                    "Referer": "https://chatgpt.com/veterans-claim",
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-origin",
                 },
                 json={"program_id": "690415d58971e73ca187d8c9"}
             )
@@ -304,11 +311,10 @@ async def get_sheerid_url_from_token(data: ChatGPTTokenRequest):
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"ChatGPT API 返回错误: {response.text}"
+                    detail=f"ChatGPT API 返回错误: {response.status_code}"
                 )
 
             result = response.json()
-            # 响应格式应该包含 SheerID URL
             return {
                 "success": True,
                 "sheerid_url": result.get("url") or result.get("verification_url") or result,
